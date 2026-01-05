@@ -1,63 +1,135 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, StatusBar } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Image,
+    TouchableOpacity,
+    FlatList,
+    Dimensions,
+    StatusBar,
+    ScrollView
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Plus } from 'lucide-react-native';
 
-export default function ProfileScreen({ user, onLogout }) {
-    const handleLogout = () => {
-        Alert.alert(
-            'Logout',
-            'Are you sure you want to logout?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: onLogout
-                }
-            ]
-        );
-    };
+const { width, height } = Dimensions.get('window');
+
+// Mock data for "My Pictures"
+const myPictures = [
+    { id: '1', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400' },
+    { id: '2', image: 'https://images.unsplash.com/photo-1539109132314-3477524c859c?w=400' },
+    { id: '3', image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400' },
+    { id: '4', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400' },
+];
+
+export default function ProfileScreen({ user }) {
+    const renderPicture = ({ item }) => (
+        <TouchableOpacity activeOpacity={0.8}>
+            <View style={styles.pictureSquare}>
+                <Image source={{ uri: item.image }} style={styles.squareImage} />
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                    style={styles.pictureOverlay}
+                />
+            </View>
+        </TouchableOpacity>
+    );
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            <LinearGradient
-                colors={['#FF5A5F', '#CE494D']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.headerGradient}
+            <ScrollView
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+                bounces={true}
             >
-                <View style={styles.header}>
-                    <Text style={styles.logo}>Profile</Text>
+                {/* Top Profile Picture with Gradient Background */}
+                <View style={styles.headerSection}>
+                    <View style={styles.largeProfilePlaceholder}>
+                        <Text style={styles.placeholderLogo}>bʈb</Text>
+                    </View>
                 </View>
-            </LinearGradient>
 
-            <View style={styles.profileContent}>
-                <LinearGradient
-                    colors={['#FF5A5F', '#CE494D']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.avatar}
-                >
-                    <Text style={styles.avatarText}>
-                        {user?.name?.charAt(0).toUpperCase() || 'U'}
-                    </Text>
-                </LinearGradient>
-                <Text style={styles.profileName}>{user?.name || 'User'}</Text>
-                <Text style={styles.profileEmail}>{user?.email}</Text>
+                {/* Info Card Container with Shadow */}
+                <View style={styles.infoCard}>
+                    <View style={styles.cardHeader}>
+                        <View>
+                            <Text style={styles.userNameText}>{user?.username || 'UserName'}</Text>
+                            <Text style={styles.userHandle}>@{user?.username?.toLowerCase() || 'username'}</Text>
+                        </View>
+                    </View>
 
-                <TouchableOpacity onPress={handleLogout}>
-                    <LinearGradient
-                        colors={['#FF5A5F', '#CE494D']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.logoutButton}
-                    >
-                        <Text style={styles.logoutButtonText}>Logout</Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-            </View>
+                    {/* Stats Row with Enhanced Design */}
+                    <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>1,000</Text>
+                            <Text style={styles.statLabel}>Pictures</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>2,000</Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </View>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>300</Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </View>
+                    </View>
+
+                    {/* Bio Description with Better Typography */}
+                    <View style={styles.bioContainer}>
+                        <Text style={styles.bioText}>
+                            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                            Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ✨
+                        </Text>
+                    </View>
+
+                    {/* My Pictures Section Header */}
+                    <View style={styles.sectionHeader}>
+                        <Text style={styles.sectionTitle}>My Gallery</Text>
+                        <TouchableOpacity activeOpacity={0.7}>
+                            <LinearGradient
+                                colors={['#FF5A5F', '#CE494D']}
+                                style={styles.plusButton}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <Plus size={20} color="white" strokeWidth={3} />
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Horizontal Carousel for Pictures */}
+                    <View style={styles.carouselWrapper}>
+                        <FlatList
+                            data={myPictures}
+                            renderItem={renderPicture}
+                            keyExtractor={item => item.id}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.horizontalList}
+                        />
+                    </View>
+
+                    {/* Edit Profile Button - Enhanced Gradient */}
+                    <TouchableOpacity activeOpacity={0.8}>
+                        <LinearGradient
+                            colors={['#FF5A5F', '#CE494D']}
+                            style={styles.editProfileButton}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                        >
+                            <Text style={styles.editProfileText}>Edit Profile</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
+
+                    {/* Extra padding at bottom for scroll */}
+                    <View style={styles.bottomPadding} />
+                </View>
+            </ScrollView>
         </View>
     );
 }
@@ -65,61 +137,199 @@ export default function ProfileScreen({ user, onLogout }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#FF5A5F',
     },
-    headerGradient: {
-        paddingTop: 50,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-    },
-    header: {
-        paddingVertical: 15,
-        alignItems: 'center',
-    },
-    logo: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#fff',
-        letterSpacing: 1,
-    },
-    profileContent: {
+    scrollView: {
         flex: 1,
-        alignItems: 'center',
-        paddingTop: 40,
     },
-    avatar: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+    headerSection: {
+        height: height * 0.35,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingTop: 20,
+        backgroundColor: '#FF5A5F',
+    },
+    largeProfilePlaceholder: {
+        width: width * 0.4,
+        height: width * 0.4,
+        backgroundColor: '#FFFFFF',
+        borderRadius: width * 0.2,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 10,
+        position: 'relative',
+    },
+    placeholderLogo: {
+        fontSize: 52,
+        fontWeight: 'bold',
+        color: '#FF5A5F',
+    },
+    cameraButton: {
+        position: 'absolute',
+        bottom: 5,
+        right: 5,
+    },
+    cameraGradient: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 8,
+    },
+    infoCard: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 35,
+        borderTopRightRadius: 35,
+        paddingTop: 25,
+        paddingHorizontal: 25,
+        paddingBottom: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 10,
+        minHeight: height * 0.7,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
         marginBottom: 20,
     },
-    avatarText: {
-        fontSize: 40,
+    userNameText: {
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#fff',
+        color: '#000',
+        marginBottom: 2,
     },
-    profileName: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-        marginBottom: 5,
+    userHandle: {
+        fontSize: 15,
+        color: '#999',
+        fontWeight: '500',
     },
-    profileEmail: {
-        fontSize: 16,
-        color: '#7f8c8d',
-        marginBottom: 30,
+    statsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        borderRadius: 20,
+        paddingVertical: 20,
+        paddingHorizontal: 15,
+        marginBottom: 20,
     },
-    logoutButton: {
-        paddingHorizontal: 30,
-        paddingVertical: 15,
-        borderRadius: 25,
-        marginTop: 20,
+    statItem: {
+        alignItems: 'center',
+        flex: 1,
     },
-    logoutButtonText: {
-        color: '#fff',
-        fontSize: 16,
+    statDivider: {
+        width: 1,
+        height: 40,
+        backgroundColor: '#E0E0E0',
+    },
+    statLabel: {
+        fontSize: 12,
+        color: '#888',
         fontWeight: '600',
+        marginTop: 4,
+    },
+    statValue: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#FF5A5F',
+    },
+    bioContainer: {
+        backgroundColor: '#F8F9FA',
+        borderRadius: 16,
+        padding: 15,
+        marginBottom: 25,
+    },
+    bioText: {
+        fontSize: 14,
+        color: '#555',
+        lineHeight: 20,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    sectionTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#000',
+        marginRight: 12,
+    },
+    plusButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#FF5A5F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        elevation: 6,
+    },
+    carouselWrapper: {
+        marginBottom: 20,
+    },
+    horizontalList: {
+        paddingVertical: 5,
+    },
+    pictureSquare: {
+        width: 100,
+        height: 100,
+        backgroundColor: '#E0E0E0',
+        borderRadius: 20,
+        marginHorizontal: 6,
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 6,
+    },
+    squareImage: {
+        width: '100%',
+        height: '100%',
+    },
+    pictureOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '30%',
+    },
+    editProfileButton: {
+        paddingVertical: 16,
+        borderRadius: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 10,
+        marginBottom: 10,
+        shadowColor: '#FF5A5F',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 8,
+    },
+    editProfileText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#FFF',
+        letterSpacing: 0.5,
+    },
+    bottomPadding: {
+        height: 20,
     },
 });
