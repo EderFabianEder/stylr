@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Search, Home, User, Settings } from 'lucide-react-native';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Search, Home, User, Settings } from 'lucide-react-native';
+
+// Screens
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
-
+import SearchScreen from './src/screens/SearchScreen';
 
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -30,6 +32,7 @@ export default function App() {
         setCurrentScreen('login');
     };
 
+    // Auth Flow
     if (!isAuthenticated) {
         return currentScreen === 'login' ? (
             <LoginScreen onLogin={handleLogin} onNavigateToRegister={() => setCurrentScreen('register')} />
@@ -38,6 +41,7 @@ export default function App() {
         );
     }
 
+    // Main App Content
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#FF5A5F" />
@@ -45,21 +49,16 @@ export default function App() {
             <View style={styles.contentArea}>
                 {activeTab === 'home' && <HomeScreen />}
                 {activeTab === 'profile' && <ProfileScreen user={user} onLogout={handleLogout} />}
+                {activeTab === 'search' && <SearchScreen />}
                 {activeTab === 'settings' && (
                     <View style={styles.placeholderContainer}>
                         <Text style={styles.placeholderText}>Settings</Text>
                         <Text style={styles.placeholderSubtext}>Coming soon...</Text>
                     </View>
                 )}
-                {activeTab === 'search' && (
-                    <View style={styles.placeholderContainer}>
-                        <Text style={styles.placeholderText}>Search Users</Text>
-                        <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-                    </View>
-                )}
             </View>
 
-            {/* Bottom Navigation mit Gradient und weißen simplen Icons */}
+            {/* Bottom Navigation with Lucide Icons */}
             <LinearGradient
                 colors={['#FF5A5F', '#CE494D']}
                 start={{ x: 0, y: 0 }}
@@ -67,36 +66,64 @@ export default function App() {
                 style={styles.bottomNavGradient}
             >
                 <View style={styles.bottomNav}>
+                    {/* Profile Tab */}
                     <TouchableOpacity
                         style={styles.navItem}
                         onPress={() => setActiveTab('profile')}
                     >
-                        <User size={24} color="white" />
-                        <Text style={styles.navIconLabel}>Profile</Text>
+                        <User
+                            size={24}
+                            color="white"
+                            style={activeTab === 'profile' ? styles.navIconActive : styles.navIconInactive}
+                        />
+                        <Text style={[styles.navIconLabel, activeTab === 'profile' && styles.labelActive]}>
+                            Profile
+                        </Text>
                     </TouchableOpacity>
 
+                    {/* Home Tab */}
                     <TouchableOpacity
                         style={styles.navItem}
                         onPress={() => setActiveTab('home')}
                     >
-                        <Home size={24} color="white" />
-                        <Text style={styles.navIconLabel}>Home</Text>
+                        <Home
+                            size={24}
+                            color="white"
+                            style={activeTab === 'home' ? styles.navIconActive : styles.navIconInactive}
+                        />
+                        <Text style={[styles.navIconLabel, activeTab === 'home' && styles.labelActive]}>
+                            Home
+                        </Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.navItem}
-                        onPress={() => setActiveTab('settings')}
-                    >
-                        <Settings size={24} color="white" />
-                        <Text style={styles.navIconLabel}>Settings</Text>
-                    </TouchableOpacity>
-
+                    {/* Search Tab */}
                     <TouchableOpacity
                         style={styles.navItem}
                         onPress={() => setActiveTab('search')}
                     >
-                        <Search size={24} color="white" />
-                        <Text style={styles.navIconLabel}>Search</Text>
+                        <Search
+                            size={24}
+                            color="white"
+                            style={activeTab === 'search' ? styles.navIconActive : styles.navIconInactive}
+                        />
+                        <Text style={[styles.navIconLabel, activeTab === 'search' && styles.labelActive]}>
+                            Search
+                        </Text>
+                    </TouchableOpacity>
+
+                    {/* Settings Tab */}
+                    <TouchableOpacity
+                        style={styles.navItem}
+                        onPress={() => setActiveTab('settings')}
+                    >
+                        <Settings
+                            size={24}
+                            color="white"
+                            style={activeTab === 'settings' ? styles.navIconActive : styles.navIconInactive}
+                        />
+                        <Text style={[styles.navIconLabel, activeTab === 'settings' && styles.labelActive]}>
+                            Settings
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </LinearGradient>
@@ -129,31 +156,33 @@ const styles = StyleSheet.create({
         marginTop: 10,
     },
     bottomNavGradient: {
-        paddingBottom: 34,
+        paddingBottom: 30, // Space for iPhone home indicator
     },
     bottomNav: {
         flexDirection: 'row',
-        paddingVertical: 8,
-        paddingTop: 12,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.1)',
     },
     navItem: {
         flex: 1,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    navIcon: {
-        fontSize: 24,
-        color: '#fff',
-        opacity: 0.6,
-        fontWeight: '300',
+    navIconInactive: {
+        opacity: 0.5,
     },
     navIconActive: {
         opacity: 1,
-        fontWeight: 'bold',
     },
     navIconLabel: {
         fontSize: 10,
         color: '#fff',
         marginTop: 4,
-        opacity: 0.8,
+        opacity: 0.6,
+    },
+    labelActive: {
+        opacity: 1,
+        fontWeight: 'bold',
     },
 });

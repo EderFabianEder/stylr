@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
-    Heart,       // ❤️ like
-    X,           // ❌ dislike / close
-    ArrowRight,  // ➡ arrow to the right
-    MessageCircle, // 💬 comment
+    Heart,
+    X,
+    ArrowRight,
+    MessageCircle,
     Flag
 } from 'lucide-react-native';
+
+// Import your CommentScreen component
+import CommentScreen from './CommentScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,6 +43,7 @@ const clothingItems = [
 
 export default function HomeScreen() {
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [showComments, setShowComments] = useState(false);
 
     const handleNext = () => {
         if (currentIndex < clothingItems.length - 1) {
@@ -60,7 +64,7 @@ export default function HomeScreen() {
     };
 
     const handleComment = () => {
-        console.log('Comment on:', clothingItems[currentIndex]);
+        setShowComments(true);
     };
 
     const handleReport = () => {
@@ -73,7 +77,7 @@ export default function HomeScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            {/* Header mit Gradient */}
+            {/* Header with Gradient */}
             <LinearGradient
                 colors={['#FF5A5F', '#CE494D']}
                 start={{ x: 0, y: 0 }}
@@ -85,12 +89,12 @@ export default function HomeScreen() {
                 </View>
             </LinearGradient>
 
-            {/* Kleidungsstück Card */}
+            {/* Clothing Card */}
             <View style={styles.cardContainer}>
                 <View style={styles.card}>
-                    {/* Flag Icon - Simpel */}
+                    {/* Report Flag Button */}
                     <TouchableOpacity style={styles.flagButton} onPress={handleReport}>
-                        <Flag size={20} color="red" />
+                        <Flag size={20} color="#FF5A5F" />
                     </TouchableOpacity>
 
                     <Image
@@ -118,24 +122,37 @@ export default function HomeScreen() {
                 </View>
             </View>
 
-            {/* Action Buttons - Schwarze Simple Icons */}
+            {/* Action Buttons - Using Lucide Icons */}
             <View style={styles.actionsContainer}>
                 <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-                    <Heart size={24} color="red" />
+                    <Heart size={28} color="#FF5A5F" fill="#FF5A5F" />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionButton} onPress={handleDislike}>
-                    <X size={24} color="black" />
+                    <X size={28} color="#333" />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionButton} onPress={handleNext}>
-                    <ArrowRight size={24} color="#333" />
+                    <ArrowRight size={28} color="#333" />
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionButton} onPress={handleComment}>
-                    <MessageCircle size={24} color="#555" />
+                    <MessageCircle size={28} color="#333" />
                 </TouchableOpacity>
             </View>
+
+            {/* Comment Modal */}
+            <Modal
+                visible={showComments}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowComments(false)}
+            >
+                <CommentScreen
+                    item={currentItem}
+                    onClose={() => setShowComments(false)}
+                />
+            </Modal>
         </View>
     );
 }
@@ -170,12 +187,12 @@ const styles = StyleSheet.create({
     card: {
         width: width - 30,
         height: height * 0.58,
-        backgroundColor: '#e0e0e0',
+        backgroundColor: '#fff',
         borderRadius: 20,
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
+        shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5,
     },
@@ -186,16 +203,12 @@ const styles = StyleSheet.create({
         zIndex: 10,
         backgroundColor: 'rgba(255, 255, 255, 0.9)',
         borderRadius: 8,
-        padding: 10,
-    },
-    flagIcon: {
-        fontSize: 20,
-        color: '#000',
+        padding: 8,
     },
     cardImage: {
         width: '100%',
         height: '75%',
-        backgroundColor: '#ccc',
+        backgroundColor: '#eee',
     },
     infoContainer: {
         flex: 1,
@@ -203,53 +216,49 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     description: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#333',
-        fontWeight: '500',
+        fontWeight: '600',
     },
     userInfo: {
         flexDirection: 'row',
         alignItems: 'center',
     },
     avatar: {
-        width: 35,
-        height: 35,
-        borderRadius: 17.5,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 10,
     },
     avatarText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 14,
         fontWeight: 'bold',
     },
     username: {
         fontSize: 14,
         color: '#666',
+        fontWeight: '500',
     },
     actionsContainer: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        paddingHorizontal: 30,
-        paddingVertical: 20,
+        paddingHorizontal: 20,
+        paddingBottom: 40, // Increased for better thumb reach
     },
     actionButton: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+        width: 65,
+        height: 65,
+        borderRadius: 32.5,
         backgroundColor: '#fff',
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.15,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    actionIcon: {
-        fontSize: 30,
-        color: '#000',
-        fontWeight: '300',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.1,
+        shadowRadius: 5,
+        elevation: 4,
     },
 });
