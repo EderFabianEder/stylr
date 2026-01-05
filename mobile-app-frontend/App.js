@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-
-// Import Screens
+import { Search, Home, User, Settings } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+
 
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -27,98 +28,132 @@ export default function App() {
         setIsAuthenticated(false);
         setUser(null);
         setCurrentScreen('login');
-        setActiveTab('home');
     };
 
-    // Auth Flow
     if (!isAuthenticated) {
-        if (currentScreen === 'login') {
-            return (
-                <LoginScreen
-                    onLogin={handleLogin}
-                    onNavigateToRegister={() => setCurrentScreen('register')}
-                />
-            );
-        } else {
-            return (
-                <RegisterScreen
-                    onRegister={handleRegister}
-                    onNavigateToLogin={() => setCurrentScreen('login')}
-                />
-            );
-        }
+        return currentScreen === 'login' ? (
+            <LoginScreen onLogin={handleLogin} onNavigateToRegister={() => setCurrentScreen('register')} />
+        ) : (
+            <RegisterScreen onRegister={handleRegister} onNavigateToLogin={() => setCurrentScreen('login')} />
+        );
     }
 
-    // Main App
     return (
-        <SafeAreaView style={styles.safeArea}>
-            {activeTab === 'home' ? (
-                <HomeScreen />
-            ) : (
-                <ProfileScreen user={user} onLogout={handleLogout} />
-            )}
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="#FF5A5F" />
 
-            {/* Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => setActiveTab('home')}
-                >
-                    <Text style={[styles.navIcon, activeTab === 'home' && styles.navIconActive]}>
-                        🏠
-                    </Text>
-                    <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>
-                        Home
-                    </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => setActiveTab('profile')}
-                >
-                    <Text style={[styles.navIcon, activeTab === 'profile' && styles.navIconActive]}>
-                        👤
-                    </Text>
-                    <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
-                        Profil
-                    </Text>
-                </TouchableOpacity>
+            <View style={styles.contentArea}>
+                {activeTab === 'home' && <HomeScreen />}
+                {activeTab === 'profile' && <ProfileScreen user={user} onLogout={handleLogout} />}
+                {activeTab === 'settings' && (
+                    <View style={styles.placeholderContainer}>
+                        <Text style={styles.placeholderText}>Settings</Text>
+                        <Text style={styles.placeholderSubtext}>Coming soon...</Text>
+                    </View>
+                )}
+                {activeTab === 'search' && (
+                    <View style={styles.placeholderContainer}>
+                        <Text style={styles.placeholderText}>Search Users</Text>
+                        <Text style={styles.placeholderSubtext}>Coming soon...</Text>
+                    </View>
+                )}
             </View>
-        </SafeAreaView>
+
+            {/* Bottom Navigation mit Gradient und weißen simplen Icons */}
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.bottomNavGradient}
+            >
+                <View style={styles.bottomNav}>
+                    <TouchableOpacity
+                        style={styles.navItem}
+                        onPress={() => setActiveTab('profile')}
+                    >
+                        <User size={24} color="white" />
+                        <Text style={styles.navIconLabel}>Profile</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.navItem}
+                        onPress={() => setActiveTab('home')}
+                    >
+                        <Home size={24} color="white" />
+                        <Text style={styles.navIconLabel}>Home</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.navItem}
+                        onPress={() => setActiveTab('settings')}
+                    >
+                        <Settings size={24} color="white" />
+                        <Text style={styles.navIconLabel}>Settings</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.navItem}
+                        onPress={() => setActiveTab('search')}
+                    >
+                        <Search size={24} color="white" />
+                        <Text style={styles.navIconLabel}>Search</Text>
+                    </TouchableOpacity>
+                </View>
+            </LinearGradient>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
+    container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#FF5A5F',
+    },
+    contentArea: {
+        flex: 1,
+        backgroundColor: '#f5f5f5',
+    },
+    placeholderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    placeholderText: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    placeholderSubtext: {
+        fontSize: 16,
+        color: '#999',
+        marginTop: 10,
+    },
+    bottomNavGradient: {
+        paddingBottom: 34,
     },
     bottomNav: {
         flexDirection: 'row',
-        backgroundColor: '#fff',
-        borderTopWidth: 1,
-        borderTopColor: '#e0e0e0',
-        paddingVertical: 10,
+        paddingVertical: 8,
+        paddingTop: 12,
     },
     navItem: {
         flex: 1,
         alignItems: 'center',
-        paddingVertical: 5,
     },
     navIcon: {
         fontSize: 24,
-        marginBottom: 4,
-        opacity: 0.5,
+        color: '#fff',
+        opacity: 0.6,
+        fontWeight: '300',
     },
     navIconActive: {
         opacity: 1,
-    },
-    navLabel: {
-        fontSize: 12,
-        color: '#7f8c8d',
-    },
-    navLabelActive: {
-        color: '#2c3e50',
         fontWeight: 'bold',
+    },
+    navIconLabel: {
+        fontSize: 10,
+        color: '#fff',
+        marginTop: 4,
+        opacity: 0.8,
     },
 });

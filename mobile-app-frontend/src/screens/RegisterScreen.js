@@ -8,9 +8,9 @@ import {
     SafeAreaView,
     KeyboardAvoidingView,
     Platform,
-    ScrollView,
     Alert
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
     const [name, setName] = useState('');
@@ -21,26 +21,25 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
 
     const handleRegister = async () => {
         if (!name || !email || !password || !confirmPassword) {
-            Alert.alert('Fehler', 'Bitte fülle alle Felder aus');
+            Alert.alert('Error', 'Please fill all fields');
             return;
         }
 
         if (password !== confirmPassword) {
-            Alert.alert('Fehler', 'Passwörter stimmen nicht überein');
+            Alert.alert('Error', 'Passwords do not match');
             return;
         }
 
         if (password.length < 6) {
-            Alert.alert('Fehler', 'Passwort muss mindestens 6 Zeichen lang sein');
+            Alert.alert('Error', 'Password must be at least 6 characters');
             return;
         }
 
         setIsLoading(true);
 
-        // TODO: Hier später API-Call zu deinem Laravel Backend
         setTimeout(() => {
             setIsLoading(false);
-            Alert.alert('Erfolg', 'Account erstellt!', [
+            Alert.alert('Success', 'Account created!', [
                 { text: 'OK', onPress: () => onRegister({ name, email }) }
             ]);
         }, 1000);
@@ -48,94 +47,97 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
 
     return (
         <SafeAreaView style={styles.container}>
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.topCircle}
+            />
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
+                <View style={styles.content}>
                     <View style={styles.registerHeader}>
-                        <TouchableOpacity onPress={onNavigateToLogin} style={styles.backButton}>
-                            <Text style={styles.backButtonText}>← Zurück</Text>
+                        <TouchableOpacity onPress={onNavigateToLogin}>
+                            <Text style={styles.backButtonText}>← Back</Text>
                         </TouchableOpacity>
-                        <Text style={styles.registerTitle}>Konto erstellen</Text>
-                        <Text style={styles.registerSubtitle}>Werde Teil der stylr Community</Text>
+                        <Text style={styles.registerTitle}>Register</Text>
+                    </View>
+
+                    <View style={styles.loginPrompt}>
+                        <Text style={styles.loginText}>Already have an account? </Text>
+                        <TouchableOpacity onPress={onNavigateToLogin}>
+                            <Text style={styles.loginLink}>login</Text>
+                        </TouchableOpacity>
                     </View>
 
                     <View style={styles.formContainer}>
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Name</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Dein Name"
-                                placeholderTextColor="#95a5a6"
-                                value={name}
-                                onChangeText={setName}
-                                autoCapitalize="words"
-                            />
-                        </View>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Name"
+                            placeholderTextColor="#999"
+                            value={name}
+                            onChangeText={setName}
+                            autoCapitalize="words"
+                        />
 
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>E-Mail</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="deine@email.com"
-                                placeholderTextColor="#95a5a6"
-                                value={email}
-                                onChangeText={setEmail}
-                                autoCapitalize="none"
-                                keyboardType="email-address"
-                                autoComplete="email"
-                            />
-                        </View>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Email"
+                            placeholderTextColor="#999"
+                            value={email}
+                            onChangeText={setEmail}
+                            autoCapitalize="none"
+                            keyboardType="email-address"
+                            autoComplete="email"
+                        />
 
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Passwort</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Mindestens 6 Zeichen"
-                                placeholderTextColor="#95a5a6"
-                                value={password}
-                                onChangeText={setPassword}
-                                secureTextEntry
-                                autoComplete="password"
-                            />
-                        </View>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Password"
+                            placeholderTextColor="#999"
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry
+                            autoComplete="password"
+                        />
 
-                        <View style={styles.inputContainer}>
-                            <Text style={styles.label}>Passwort bestätigen</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Passwort wiederholen"
-                                placeholderTextColor="#95a5a6"
-                                value={confirmPassword}
-                                onChangeText={setConfirmPassword}
-                                secureTextEntry
-                            />
-                        </View>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Confirm Password"
+                            placeholderTextColor="#999"
+                            value={confirmPassword}
+                            onChangeText={setConfirmPassword}
+                            secureTextEntry
+                        />
 
                         <TouchableOpacity
-                            style={[styles.button, styles.loginButton, isLoading && styles.buttonDisabled]}
                             onPress={handleRegister}
                             disabled={isLoading}
                         >
-                            <Text style={styles.buttonText}>
-                                {isLoading ? 'Lädt...' : 'Registrieren'}
-                            </Text>
+                            <LinearGradient
+                                colors={['#FF5A5F', '#CE494D']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[styles.registerButton, isLoading && styles.buttonDisabled]}
+                            >
+                                <Text style={styles.registerButtonText}>
+                                    {isLoading ? 'Loading...' : 'Register'}
+                                </Text>
+                            </LinearGradient>
                         </TouchableOpacity>
-
-                        <View style={styles.termsContainer}>
-                            <Text style={styles.termsText}>
-                                Mit der Registrierung stimmst du unseren{' '}
-                                <Text style={styles.termsLink}>AGB</Text> und{' '}
-                                <Text style={styles.termsLink}>Datenschutzrichtlinien</Text> zu
-                            </Text>
-                        </View>
                     </View>
-                </ScrollView>
+                </View>
             </KeyboardAvoidingView>
+
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.bottomCircle}
+            />
         </SafeAreaView>
     );
 }
@@ -148,83 +150,91 @@ const styles = StyleSheet.create({
     keyboardView: {
         flex: 1,
     },
-    scrollContent: {
-        flexGrow: 1,
-        justifyContent: 'center',
-        padding: 20,
+    content: {
+        flex: 1,
+        paddingHorizontal: 30,
+        paddingTop: 60,
+    },
+    topCircle: {
+        position: 'absolute',
+        top: -100,
+        left: -50,
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        opacity: 0.6,
+        zIndex: -1,
+    },
+    bottomCircle: {
+        position: 'absolute',
+        bottom: -80,
+        left: -60,
+        width: 180,
+        height: 180,
+        borderRadius: 90,
+        opacity: 0.5,
+        zIndex: -1,
     },
     registerHeader: {
-        marginBottom: 40,
-    },
-    backButton: {
         marginBottom: 20,
+        marginTop: 80,
     },
     backButtonText: {
-        color: '#3498db',
+        color: '#FF5A5F',
         fontSize: 16,
         fontWeight: '600',
+        marginBottom: 20,
     },
     registerTitle: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-        marginBottom: 8,
+        fontSize: 36,
+        fontWeight: '300',
+        color: '#000',
     },
-    registerSubtitle: {
-        fontSize: 16,
-        color: '#7f8c8d',
+    loginPrompt: {
+        flexDirection: 'row',
+        marginBottom: 40,
+    },
+    loginText: {
+        fontSize: 14,
+        color: '#666',
+    },
+    loginLink: {
+        fontSize: 14,
+        color: '#FF5A5F',
+        fontWeight: '500',
     },
     formContainer: {
         width: '100%',
     },
-    inputContainer: {
+    input: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#333',
+        borderRadius: 25,
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        fontSize: 14,
+        color: '#000',
         marginBottom: 20,
     },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2c3e50',
-        marginBottom: 8,
-    },
-    input: {
-        backgroundColor: '#f8f9fa',
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
-        color: '#2c3e50',
-    },
-    button: {
-        borderRadius: 12,
-        paddingVertical: 16,
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    loginButton: {
-        backgroundColor: '#2c3e50',
+    registerButton: {
+        borderRadius: 25,
+        paddingVertical: 15,
+        paddingHorizontal: 40,
+        alignSelf: 'flex-start',
+        marginTop: 10,
+        shadowColor: '#FF5A5F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
     },
     buttonDisabled: {
         opacity: 0.6,
     },
-    buttonText: {
+    registerButtonText: {
         color: '#fff',
         fontSize: 16,
-        fontWeight: '600',
-    },
-    termsContainer: {
-        marginTop: 20,
-        paddingHorizontal: 10,
-    },
-    termsText: {
-        fontSize: 12,
-        color: '#95a5a6',
-        textAlign: 'center',
-        lineHeight: 18,
-    },
-    termsLink: {
-        color: '#3498db',
         fontWeight: '600',
     },
 });

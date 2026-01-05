@@ -8,9 +8,9 @@ import {
     SafeAreaView,
     KeyboardAvoidingView,
     Platform,
-    ScrollView,
     Alert
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginScreen({ onLogin, onNavigateToRegister }) {
     const [email, setEmail] = useState('');
@@ -19,13 +19,12 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Fehler', 'Bitte fülle alle Felder aus');
+            Alert.alert('Error', 'Please fill all fields');
             return;
         }
 
         setIsLoading(true);
 
-        // TODO: Hier später API-Call zu deinem Laravel Backend
         setTimeout(() => {
             setIsLoading(false);
             onLogin({ email });
@@ -34,21 +33,21 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Top Circle mit Gradient */}
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.topCircle}
+            />
+
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
             >
-                <ScrollView
-                    contentContainerStyle={styles.scrollContent}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Top Circle Decoration */}
-                    <View style={styles.topCircle} />
-
-                    {/* Login Title */}
+                <View style={styles.content}>
                     <Text style={styles.title}>Login</Text>
 
-                    {/* Don't have an account */}
                     <View style={styles.signupPrompt}>
                         <Text style={styles.signupText}>Don't have an account? </Text>
                         <TouchableOpacity onPress={onNavigateToRegister}>
@@ -56,7 +55,6 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* Form */}
                     <View style={styles.formContainer}>
                         <TextInput
                             style={styles.input}
@@ -80,20 +78,31 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
                         />
 
                         <TouchableOpacity
-                            style={[styles.loginButton, isLoading && styles.buttonDisabled]}
                             onPress={handleLogin}
                             disabled={isLoading}
                         >
-                            <Text style={styles.loginButtonText}>
-                                {isLoading ? 'Loading...' : 'Login'}
-                            </Text>
+                            <LinearGradient
+                                colors={['#FF5A5F', '#CE494D']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[styles.loginButton, isLoading && styles.buttonDisabled]}
+                            >
+                                <Text style={styles.loginButtonText}>
+                                    {isLoading ? 'Loading...' : 'Login'}
+                                </Text>
+                            </LinearGradient>
                         </TouchableOpacity>
                     </View>
-
-                    {/* Bottom Circle Decoration */}
-                    <View style={styles.bottomCircle} />
-                </ScrollView>
+                </View>
             </KeyboardAvoidingView>
+
+            {/* Bottom Circle mit Gradient */}
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.bottomCircle}
+            />
         </SafeAreaView>
     );
 }
@@ -101,13 +110,13 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#fff',
     },
     keyboardView: {
         flex: 1,
     },
-    scrollContent: {
-        flexGrow: 1,
+    content: {
+        flex: 1,
         paddingHorizontal: 30,
         paddingTop: 60,
     },
@@ -118,8 +127,8 @@ const styles = StyleSheet.create({
         width: 200,
         height: 200,
         borderRadius: 100,
-        backgroundColor: '#ff7b9d',
         opacity: 0.6,
+        zIndex: -1,
     },
     bottomCircle: {
         position: 'absolute',
@@ -128,8 +137,8 @@ const styles = StyleSheet.create({
         width: 180,
         height: 180,
         borderRadius: 90,
-        backgroundColor: '#ff7b9d',
         opacity: 0.5,
+        zIndex: -1,
     },
     title: {
         fontSize: 36,
@@ -148,7 +157,7 @@ const styles = StyleSheet.create({
     },
     signupLink: {
         fontSize: 14,
-        color: '#ff7b9d',
+        color: '#FF5A5F',
         fontWeight: '500',
     },
     formContainer: {
@@ -166,13 +175,12 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     loginButton: {
-        backgroundColor: '#ff6b8a',
         borderRadius: 25,
         paddingVertical: 15,
         paddingHorizontal: 40,
         alignSelf: 'flex-start',
         marginTop: 10,
-        shadowColor: '#ff6b8a',
+        shadowColor: '#FF5A5F',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
