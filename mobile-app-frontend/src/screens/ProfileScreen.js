@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Plus } from 'lucide-react-native';
+import EditProfileScreen from './EditProfileScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,25 @@ const myPictures = [
 ];
 
 export default function ProfileScreen({ user }) {
+    const [showEditScreen, setShowEditScreen] = useState(false);
+    const [userData, setUserData] = useState(user);
+
+    const handleSaveProfile = (updatedData) => {
+        setUserData(updatedData);
+        setShowEditScreen(false);
+    };
+
+    // Show Edit Profile Screen
+    if (showEditScreen) {
+        return (
+            <EditProfileScreen
+                user={userData}
+                onSave={handleSaveProfile}
+                onBack={() => setShowEditScreen(false)}
+            />
+        );
+    }
+
     const renderPicture = ({ item }) => (
         <TouchableOpacity activeOpacity={0.8}>
             <View style={styles.pictureSquare}>
@@ -56,8 +76,8 @@ export default function ProfileScreen({ user }) {
                 <View style={styles.infoCard}>
                     <View style={styles.cardHeader}>
                         <View>
-                            <Text style={styles.userNameText}>{user?.username || 'UserName'}</Text>
-                            <Text style={styles.userHandle}>@{user?.username?.toLowerCase() || 'username'}</Text>
+                            <Text style={styles.userNameText}>{userData?.username || 'UserName'}</Text>
+                            <Text style={styles.userHandle}>@{userData?.username?.toLowerCase() || 'username'}</Text>
                         </View>
                     </View>
 
@@ -82,8 +102,7 @@ export default function ProfileScreen({ user }) {
                     {/* Bio Description with Better Typography */}
                     <View style={styles.bioContainer}>
                         <Text style={styles.bioText}>
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-                            Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ✨
+                            {userData?.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ✨'}
                         </Text>
                     </View>
 
@@ -115,7 +134,10 @@ export default function ProfileScreen({ user }) {
                     </View>
 
                     {/* Edit Profile Button - Enhanced Gradient */}
-                    <TouchableOpacity activeOpacity={0.8}>
+                    <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => setShowEditScreen(true)}
+                    >
                         <LinearGradient
                             colors={['#FF5A5F', '#CE494D']}
                             style={styles.editProfileButton}
@@ -161,29 +183,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 10,
-        position: 'relative',
     },
     placeholderLogo: {
         fontSize: 52,
         fontWeight: 'bold',
         color: '#FF5A5F',
-    },
-    cameraButton: {
-        position: 'absolute',
-        bottom: 5,
-        right: 5,
-    },
-    cameraGradient: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 8,
     },
     infoCard: {
         backgroundColor: '#FFF',
