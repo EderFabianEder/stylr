@@ -24,13 +24,17 @@ const myPictures = [
     { id: '4', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400' },
 ];
 
-export default function ProfileScreen({ user }) {
+export default function ProfileScreen({ user, onUpdateUser }) {
     const [showEditScreen, setShowEditScreen] = useState(false);
     const [userData, setUserData] = useState(user);
 
     const handleSaveProfile = (updatedData) => {
         setUserData(updatedData);
         setShowEditScreen(false);
+        // Persist the update to parent
+        if (onUpdateUser) {
+            onUpdateUser(updatedData);
+        }
     };
 
     // Show Edit Profile Screen
@@ -68,7 +72,11 @@ export default function ProfileScreen({ user }) {
                 {/* Top Profile Picture with Gradient Background */}
                 <View style={styles.headerSection}>
                     <View style={styles.largeProfilePlaceholder}>
-                        <Text style={styles.placeholderLogo}>bʈb</Text>
+                        {userData?.profilePhoto ? (
+                            <Image source={{ uri: userData.profilePhoto }} style={styles.profileImage} />
+                        ) : (
+                            <Text style={styles.placeholderLogo}>bʈb</Text>
+                        )}
                     </View>
                 </View>
 
@@ -183,6 +191,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 12,
         elevation: 10,
+        overflow: 'hidden',
+    },
+    profileImage: {
+        width: '100%',
+        height: '100%',
     },
     placeholderLogo: {
         fontSize: 52,

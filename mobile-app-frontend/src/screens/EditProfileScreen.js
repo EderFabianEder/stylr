@@ -10,26 +10,46 @@ import {
     Dimensions,
     KeyboardAvoidingView,
     Platform,
+    Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Check } from 'lucide-react-native';
+import ChangeProfilePhotoScreen from './ChangeProfilePhotoScreen';
 
 const { width, height } = Dimensions.get('window');
 
 export default function EditProfileScreen({ user, onSave, onBack }) {
     const [username, setUsername] = useState(user?.username || '');
     const [description, setDescription] = useState(user?.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ✨');
+    const [profilePhoto, setProfilePhoto] = useState(user?.profilePhoto || null);
+    const [showChangePhotoScreen, setShowChangePhotoScreen] = useState(false);
+
+    const handlePhotoSave = (photoUri) => {
+        setProfilePhoto(photoUri);
+        setShowChangePhotoScreen(false);
+    };
 
     const handleSave = () => {
         // Save the changes
         if (onSave) {
-            onSave({ username, description });
+            onSave({ username, description, profilePhoto });
         }
         // Go back to profile
         if (onBack) {
             onBack();
         }
     };
+
+    // Show Change Photo Screen
+    if (showChangePhotoScreen) {
+        return (
+            <ChangeProfilePhotoScreen
+                currentPhoto={profilePhoto}
+                onSave={handlePhotoSave}
+                onBack={() => setShowChangePhotoScreen(false)}
+            />
+        );
+    }
 
     return (
         <KeyboardAvoidingView
@@ -62,9 +82,16 @@ export default function EditProfileScreen({ user, onSave, onBack }) {
                 {/* Profile Picture Section */}
                 <View style={styles.profileSection}>
                     <View style={styles.profilePlaceholder}>
-                        <Text style={styles.placeholderLogo}>bʈb</Text>
+                        {profilePhoto ? (
+                            <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+                        ) : (
+                            <Text style={styles.placeholderLogo}>bʈb</Text>
+                        )}
                     </View>
-                    <TouchableOpacity activeOpacity={0.7}>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => setShowChangePhotoScreen(true)}
+                    >
                         <Text style={styles.changePhotoText}>Change Profile Photo</Text>
                     </TouchableOpacity>
                 </View>
@@ -178,6 +205,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 8,
         elevation: 5,
+        overflow: 'hidden',
+    },
+    profileImage: {
+        width: '100%',
+        height: '100%',
     },
     placeholderLogo: {
         fontSize: 42,

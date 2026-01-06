@@ -41,7 +41,7 @@ const clothingItems = [
     },
 ];
 
-export default function HomeScreen() {
+export default function HomeScreen({ user }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
 
@@ -151,6 +151,7 @@ export default function HomeScreen() {
                 <CommentScreen
                     item={currentItem}
                     onClose={() => setShowComments(false)}
+                    currentUser={user}  // Add this line
                 />
             </Modal>
         </View>

@@ -8,7 +8,8 @@ import {
     FlatList,
     KeyboardAvoidingView,
     Platform,
-    StatusBar
+    StatusBar,
+    Image
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -34,7 +35,7 @@ const mockComments = [
     },
 ];
 
-export default function CommentScreen({ item, onClose }) {
+export default function CommentScreen({ item, onClose, currentUser }) {
     const [comments, setComments] = useState(mockComments);
     const [newComment, setNewComment] = useState('');
 
@@ -42,9 +43,11 @@ export default function CommentScreen({ item, onClose }) {
         if (newComment.trim()) {
             const comment = {
                 id: Date.now(),
-                username: 'you',
+                username: currentUser?.username || 'you',
                 text: newComment,
                 timestamp: 'Just now',
+                isCurrentUser: true,
+                profilePhoto: currentUser?.profilePhoto,
             };
             setComments([comment, ...comments]);
             setNewComment('');
@@ -53,16 +56,25 @@ export default function CommentScreen({ item, onClose }) {
 
     const renderComment = ({ item }) => (
         <View style={styles.commentItem}>
-            <LinearGradient
-                colors={['#FF5A5F', '#CE494D']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.commentAvatar}
-            >
-                <Text style={styles.commentAvatarText}>
-                    {item.username.charAt(0).toUpperCase()}
-                </Text>
-            </LinearGradient>
+            {item.profilePhoto ? (
+                <View style={styles.commentAvatarContainer}>
+                    <Image
+                        source={{ uri: item.profilePhoto }}
+                        style={styles.commentAvatarImage}
+                    />
+                </View>
+            ) : (
+                <LinearGradient
+                    colors={['#FF5A5F', '#CE494D']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.commentAvatar}
+                >
+                    <Text style={styles.commentAvatarText}>
+                        {item.username.charAt(0).toUpperCase()}
+                    </Text>
+                </LinearGradient>
+            )}
             <View style={styles.commentContent}>
                 <View style={styles.commentHeader}>
                     <Text style={styles.commentUsername}>{item.username}</Text>
@@ -202,6 +214,17 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 2,
         elevation: 2,
+    },
+    commentAvatarContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginRight: 12,
+        overflow: 'hidden',
+    },
+    commentAvatarImage: {
+        width: '100%',
+        height: '100%',
     },
     commentAvatar: {
         width: 40,

@@ -26,6 +26,14 @@ export default function App() {
         setIsAuthenticated(true);
     };
 
+    // Add this new function to update user profile
+    const handleUpdateProfile = (updatedUserData) => {
+        setUser(prevUser => ({
+            ...prevUser,
+            ...updatedUserData
+        }));
+    };
+
     const handleLogout = () => {
         setIsAuthenticated(false);
         setUser(null);
@@ -47,8 +55,8 @@ export default function App() {
             <StatusBar barStyle="light-content" backgroundColor="#FF5A5F" />
 
             <View style={styles.contentArea}>
-                {activeTab === 'home' && <HomeScreen />}
-                {activeTab === 'profile' && <ProfileScreen user={user} onLogout={handleLogout} />}
+                {activeTab === 'home' && <HomeScreen user={user} />}
+                {activeTab === 'profile' && <ProfileScreen user={user} onUpdateUser={handleUpdateProfile} onLogout={handleLogout} />}
                 {activeTab === 'search' && <SearchScreen />}
                 {activeTab === 'settings' && (
                     <View style={styles.placeholderContainer}>
