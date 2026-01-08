@@ -13,11 +13,12 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Plus } from 'lucide-react-native';
 import EditProfileScreen from './EditProfileScreen';
+import AddPhotoScreen from './AddPhotoScreen';
 
 const { width, height } = Dimensions.get('window');
 
 // Mock data for "My Pictures"
-const myPictures = [
+const initialPictures = [
     { id: '1', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400' },
     { id: '2', image: 'https://images.unsplash.com/photo-1539109132314-3477524c859c?w=400' },
     { id: '3', image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400' },
@@ -26,7 +27,9 @@ const myPictures = [
 
 export default function ProfileScreen({ user, onUpdateUser }) {
     const [showEditScreen, setShowEditScreen] = useState(false);
+    const [showAddPhotoScreen, setShowAddPhotoScreen] = useState(false);
     const [userData, setUserData] = useState(user);
+    const [myPictures, setMyPictures] = useState(initialPictures);
 
     const handleSaveProfile = (updatedData) => {
         setUserData(updatedData);
@@ -37,6 +40,16 @@ export default function ProfileScreen({ user, onUpdateUser }) {
         }
     };
 
+    const handleAddPhoto = (photoData) => {
+        // Add the new photo to the beginning of the list
+        const newPhoto = {
+            id: photoData.id,
+            image: photoData.image,
+            description: photoData.description,
+        };
+        setMyPictures(prevPictures => [newPhoto, ...prevPictures]);
+    };
+
     // Show Edit Profile Screen
     if (showEditScreen) {
         return (
@@ -44,6 +57,16 @@ export default function ProfileScreen({ user, onUpdateUser }) {
                 user={userData}
                 onSave={handleSaveProfile}
                 onBack={() => setShowEditScreen(false)}
+            />
+        );
+    }
+
+    // Show Add Photo Screen
+    if (showAddPhotoScreen) {
+        return (
+            <AddPhotoScreen
+                onBack={() => setShowAddPhotoScreen(false)}
+                onSubmit={handleAddPhoto}
             />
         );
     }
@@ -92,7 +115,7 @@ export default function ProfileScreen({ user, onUpdateUser }) {
                     {/* Stats Row with Enhanced Design */}
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>1,000</Text>
+                            <Text style={styles.statValue}>{myPictures.length.toLocaleString()}</Text>
                             <Text style={styles.statLabel}>Pictures</Text>
                         </View>
                         <View style={styles.statDivider} />
@@ -117,7 +140,10 @@ export default function ProfileScreen({ user, onUpdateUser }) {
                     {/* My Pictures Section Header */}
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>My Gallery</Text>
-                        <TouchableOpacity activeOpacity={0.7}>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => setShowAddPhotoScreen(true)}
+                        >
                             <LinearGradient
                                 colors={['#FF5A5F', '#CE494D']}
                                 style={styles.plusButton}
