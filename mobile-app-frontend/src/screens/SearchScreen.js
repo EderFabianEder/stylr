@@ -6,11 +6,12 @@ import {
     TouchableOpacity,
     StyleSheet,
     FlatList,
-    StatusBar
+    StatusBar,
+    Pressable
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-// Import Search and X from lucide-react-native
 import { Search, X } from 'lucide-react-native';
+import OtherProfileScreen from './OtherProfileScreen';
 
 // Mock Users
 const mockUsers = [
@@ -28,6 +29,8 @@ export default function SearchScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [users, setUsers] = useState(mockUsers);
     const [following, setFollowing] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [showProfile, setShowProfile] = useState(false);
 
     const handleSearch = (text) => {
         setSearchQuery(text);
@@ -49,11 +52,39 @@ export default function SearchScreen() {
         }
     };
 
+    const handleUserPress = (user) => {
+        console.log('User pressed:', user.username);
+        setSelectedUser(user);
+        setShowProfile(true);
+    };
+
+    const handleBackFromProfile = () => {
+        setShowProfile(false);
+        setSelectedUser(null);
+    };
+
+    // Show OtherProfileScreen if a user is selected
+    if (showProfile && selectedUser) {
+        return (
+            <OtherProfileScreen
+                user={selectedUser}
+                onBack={handleBackFromProfile}
+                initialFollowing={following.includes(selectedUser.id)}
+            />
+        );
+    }
+
     const renderUser = ({ item }) => {
         const isFollowing = following.includes(item.id);
 
         return (
-            <View style={styles.userItem}>
+            <Pressable
+                onPress={() => handleUserPress(item)}
+                style={({ pressed }) => [
+                    styles.userItem,
+                    pressed && styles.userItemPressed
+                ]}
+            >
                 <LinearGradient
                     colors={['#FF5A5F', '#CE494D']}
                     start={{ x: 0, y: 0 }}
@@ -72,7 +103,13 @@ export default function SearchScreen() {
                     </Text>
                 </View>
 
-                <TouchableOpacity onPress={() => handleFollow(item.id)}>
+                <Pressable
+                    onPress={(e) => {
+                        e.stopPropagation();
+                        handleFollow(item.id);
+                    }}
+                    style={styles.followButtonContainer}
+                >
                     {isFollowing ? (
                         <View style={styles.followingButton}>
                             <Text style={styles.followingButtonText}>Following</Text>
@@ -87,8 +124,8 @@ export default function SearchScreen() {
                             <Text style={styles.followButtonText}>Follow</Text>
                         </LinearGradient>
                     )}
-                </TouchableOpacity>
-            </View>
+                </Pressable>
+            </Pressable>
         );
     };
 
@@ -111,7 +148,6 @@ export default function SearchScreen() {
             {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
-                    {/* Replaced Text Icon with Lucide Search Icon */}
                     <Search size={20} color="#666" style={styles.searchIcon} />
 
                     <TextInput
@@ -125,7 +161,6 @@ export default function SearchScreen() {
 
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => handleSearch('')}>
-                            {/* Replaced Text X with Lucide X Icon */}
                             <X size={18} color="#999" />
                         </TouchableOpacity>
                     )}
@@ -201,6 +236,11 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 2,
         elevation: 2,
+        cursor: 'pointer',
+    },
+    userItemPressed: {
+        opacity: 0.7,
+        backgroundColor: '#f9f9f9',
     },
     userAvatar: {
         width: 50,
@@ -227,6 +267,9 @@ const styles = StyleSheet.create({
     userStats: {
         fontSize: 13,
         color: '#666',
+    },
+    followButtonContainer: {
+        zIndex: 10,
     },
     followButton: {
         paddingHorizontal: 20,
