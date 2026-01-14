@@ -11,6 +11,7 @@ import {
 
 // Import your CommentScreen component
 import CommentScreen from './CommentScreen';
+import ReportScreen from './ReportScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -44,6 +45,7 @@ const clothingItems = [
 export default function HomeScreen({ user }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
+    const [showReport, setShowReport] = useState(false);
 
     const handleNext = () => {
         if (currentIndex < clothingItems.length - 1) {
@@ -68,7 +70,12 @@ export default function HomeScreen({ user }) {
     };
 
     const handleReport = () => {
-        console.log('Report:', clothingItems[currentIndex]);
+        setShowReport(true);
+    };
+
+    const handleReportSubmit = (reportData) => {
+        console.log('Report submitted:', reportData);
+        // Here you would typically send this to your backend
     };
 
     const currentItem = clothingItems[currentIndex];
@@ -151,7 +158,21 @@ export default function HomeScreen({ user }) {
                 <CommentScreen
                     item={currentItem}
                     onClose={() => setShowComments(false)}
-                    currentUser={user}  // Add this line
+                    currentUser={user}
+                />
+            </Modal>
+
+            {/* Report Modal */}
+            <Modal
+                visible={showReport}
+                animationType="slide"
+                presentationStyle="pageSheet"
+                onRequestClose={() => setShowReport(false)}
+            >
+                <ReportScreen
+                    item={currentItem}
+                    onClose={() => setShowReport(false)}
+                    onSubmit={handleReportSubmit}
                 />
             </Modal>
         </View>
@@ -247,7 +268,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-around',
         paddingHorizontal: 20,
-        paddingBottom: 40, // Increased for better thumb reach
+        paddingBottom: 40,
     },
     actionButton: {
         width: 65,
