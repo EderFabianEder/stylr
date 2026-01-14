@@ -11,9 +11,10 @@ import {
     ScrollView,
     Alert,
     ActivityIndicator,
+    Switch,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Camera, ImagePlus, X } from 'lucide-react-native';
+import { ArrowLeft, Camera, ImagePlus, X, MessageCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width, height } = Dimensions.get('window');
@@ -22,6 +23,7 @@ export default function AddPhotoScreen({ onBack, onSubmit }) {
     const [selectedImage, setSelectedImage] = useState(null);
     const [description, setDescription] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [commentsAllowed, setCommentsAllowed] = useState(true);
 
     const pickImageFromGallery = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -88,6 +90,7 @@ export default function AddPhotoScreen({ onBack, onSubmit }) {
                     description: description.trim(),
                     id: Date.now().toString(),
                     createdAt: new Date().toISOString(),
+                    commentsAllowed: commentsAllowed,
                 });
             }
             setIsLoading(false);
@@ -197,6 +200,28 @@ export default function AddPhotoScreen({ onBack, onSubmit }) {
                     <Text style={styles.characterCount}>
                         {description.length}/500
                     </Text>
+                </View>
+
+                {/* Settings Section */}
+                <View style={styles.settingsSection}>
+                    <Text style={styles.sectionLabel}>Settings</Text>
+                    <View style={styles.settingItem}>
+                        <View style={styles.settingIconContainer}>
+                            <MessageCircle size={20} color="#FF5A5F" strokeWidth={2} />
+                        </View>
+                        <View style={styles.settingTextContainer}>
+                            <Text style={styles.settingTitle}>Allow Comments</Text>
+                            <Text style={styles.settingSubtitle}>
+                                {commentsAllowed ? "Anyone can comment on this photo" : "Comments are disabled"}
+                            </Text>
+                        </View>
+                        <Switch
+                            value={commentsAllowed}
+                            onValueChange={setCommentsAllowed}
+                            trackColor={{ false: '#ddd', true: '#FFB5B7' }}
+                            thumbColor={commentsAllowed ? '#FF5A5F' : '#f4f3f4'}
+                        />
+                    </View>
                 </View>
 
                 {/* Submit Button */}
@@ -361,6 +386,40 @@ const styles = StyleSheet.create({
         marginTop: 8,
         fontSize: 12,
         color: '#999',
+    },
+    settingsSection: {
+        marginTop: 25,
+    },
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F8F9FA',
+        padding: 15,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#E0E0E0',
+    },
+    settingIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    settingTextContainer: {
+        flex: 1,
+    },
+    settingTitle: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+    },
+    settingSubtitle: {
+        fontSize: 12,
+        color: '#888',
+        marginTop: 2,
     },
     submitButton: {
         marginTop: 30,

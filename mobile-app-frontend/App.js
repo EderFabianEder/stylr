@@ -9,6 +9,7 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SearchScreen from './src/screens/SearchScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -38,6 +39,7 @@ export default function App() {
         setIsAuthenticated(false);
         setUser(null);
         setCurrentScreen('login');
+        setActiveTab('home');
     };
 
     // Auth Flow
@@ -58,12 +60,7 @@ export default function App() {
                 {activeTab === 'home' && <HomeScreen user={user} />}
                 {activeTab === 'profile' && <ProfileScreen user={user} onUpdateUser={handleUpdateProfile} onLogout={handleLogout} />}
                 {activeTab === 'search' && <SearchScreen />}
-                {activeTab === 'settings' && (
-                    <View style={styles.placeholderContainer}>
-                        <Text style={styles.placeholderText}>Settings</Text>
-                        <Text style={styles.placeholderSubtext}>Coming soon...</Text>
-                    </View>
-                )}
+                {activeTab === 'settings' && <SettingsScreen user={user} onLogout={handleLogout} />}
             </View>
 
             {/* Bottom Navigation with Lucide Icons */}
