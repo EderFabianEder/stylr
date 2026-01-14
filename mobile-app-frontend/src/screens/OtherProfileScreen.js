@@ -13,28 +13,54 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, MessageCircle } from 'lucide-react-native';
+import PictureStatsScreen from './PictureStatsScreen';
 
 const { width, height } = Dimensions.get('window');
 
 // Mock data for user's pictures
 const userPictures = [
-    { id: '1', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400' },
-    { id: '2', image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400' },
-    { id: '3', image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400' },
-    { id: '4', image: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=400' },
-    { id: '5', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400' },
-    { id: '6', image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400' },
+    { id: '1', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400', description: 'Portrait session 📸' },
+    { id: '2', image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400', description: 'Golden hour magic ✨' },
+    { id: '3', image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400', description: 'New look, who dis?' },
+    { id: '4', image: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=400', description: 'Weekend vibes 🌴' },
+    { id: '5', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400', description: 'Feeling happy today!' },
+    { id: '6', image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400', description: 'Beach day 🏖️' },
 ];
 
 export default function OtherProfileScreen({ user, onBack, initialFollowing = false }) {
     const [isFollowing, setIsFollowing] = useState(initialFollowing);
+    const [showPictureStats, setShowPictureStats] = useState(false);
+    const [selectedPicture, setSelectedPicture] = useState(null);
 
     const handleFollowToggle = () => {
         setIsFollowing(!isFollowing);
     };
 
+    const handlePicturePress = (picture) => {
+        setSelectedPicture(picture);
+        setShowPictureStats(true);
+    };
+
+    // Show Picture Stats Screen
+    if (showPictureStats && selectedPicture) {
+        return (
+            <PictureStatsScreen
+                picture={selectedPicture}
+                onClose={() => {
+                    setShowPictureStats(false);
+                    setSelectedPicture(null);
+                }}
+                currentUser={null}
+                isOwnPicture={false}
+            />
+        );
+    }
+
     const renderPicture = ({ item }) => (
-        <TouchableOpacity activeOpacity={0.8}>
+        <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handlePicturePress(item)}
+        >
             <View style={styles.pictureSquare}>
                 <Image source={{ uri: item.image }} style={styles.squareImage} />
                 <LinearGradient

@@ -14,20 +14,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Plus } from 'lucide-react-native';
 import EditProfileScreen from './EditProfileScreen';
 import AddPhotoScreen from './AddPhotoScreen';
+import PictureStatsScreen from './PictureStatsScreen';
 
 const { width, height } = Dimensions.get('window');
 
 // Mock data for "My Pictures"
 const initialPictures = [
-    { id: '1', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400' },
-    { id: '2', image: 'https://images.unsplash.com/photo-1539109132314-3477524c859c?w=400' },
-    { id: '3', image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400' },
-    { id: '4', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400' },
+    { id: '1', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400', description: 'Summer vibes ☀️' },
+    { id: '2', image: 'https://images.unsplash.com/photo-1539109132314-3477524c859c?w=400', description: 'New outfit of the day!' },
+    { id: '3', image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400', description: 'Feeling elegant ✨' },
+    { id: '4', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400', description: 'Concert night 🎵' },
 ];
 
 export default function ProfileScreen({ user, onUpdateUser }) {
     const [showEditScreen, setShowEditScreen] = useState(false);
     const [showAddPhotoScreen, setShowAddPhotoScreen] = useState(false);
+    const [showPictureStats, setShowPictureStats] = useState(false);
+    const [selectedPicture, setSelectedPicture] = useState(null);
     const [userData, setUserData] = useState(user);
     const [myPictures, setMyPictures] = useState(initialPictures);
 
@@ -48,6 +51,15 @@ export default function ProfileScreen({ user, onUpdateUser }) {
             description: photoData.description,
         };
         setMyPictures(prevPictures => [newPhoto, ...prevPictures]);
+    };
+
+    const handlePicturePress = (picture) => {
+        setSelectedPicture(picture);
+        setShowPictureStats(true);
+    };
+
+    const handleDeletePicture = (pictureId) => {
+        setMyPictures(prevPictures => prevPictures.filter(p => p.id !== pictureId));
     };
 
     // Show Edit Profile Screen
@@ -71,8 +83,27 @@ export default function ProfileScreen({ user, onUpdateUser }) {
         );
     }
 
+    // Show Picture Stats Screen
+    if (showPictureStats && selectedPicture) {
+        return (
+            <PictureStatsScreen
+                picture={selectedPicture}
+                onClose={() => {
+                    setShowPictureStats(false);
+                    setSelectedPicture(null);
+                }}
+                onDelete={handleDeletePicture}
+                currentUser={userData}
+                isOwnPicture={true}
+            />
+        );
+    }
+
     const renderPicture = ({ item }) => (
-        <TouchableOpacity activeOpacity={0.8}>
+        <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handlePicturePress(item)}
+        >
             <View style={styles.pictureSquare}>
                 <Image source={{ uri: item.image }} style={styles.squareImage} />
                 <LinearGradient
