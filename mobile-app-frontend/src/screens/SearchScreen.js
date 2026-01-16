@@ -11,7 +11,18 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, X } from 'lucide-react-native';
+// Make sure this file exists in the same directory
 import OtherProfileScreen from './OtherProfileScreen';
+
+// If OtherProfileScreen doesn't exist, uncomment this for testing:
+// const OtherProfileScreen = ({ user, onBack }) => (
+//     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+//         <Text style={{ fontSize: 24, marginBottom: 20 }}>Profile: {user?.username}</Text>
+//         <TouchableOpacity onPress={onBack} style={{ padding: 15, backgroundColor: '#FF5A5F', borderRadius: 10 }}>
+//             <Text style={{ color: '#fff' }}>Go Back</Text>
+//         </TouchableOpacity>
+//     </View>
+// );
 
 // Mock Users
 const mockUsers = [
@@ -25,22 +36,28 @@ const mockUsers = [
     { id: 8, username: 'elegant_ella', followers: 987, following: 345 },
 ];
 
-export default function SearchScreen() {
+export default function SearchScreen({ blockedUsers = [], onBlockUser }) {
     const [searchQuery, setSearchQuery] = useState('');
-    const [users, setUsers] = useState(mockUsers);
     const [following, setFollowing] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
 
+    // Filter out blocked users from the list
+    const availableUsers = mockUsers.filter(user =>
+        !blockedUsers.some(blocked => blocked.id === user.id)
+    );
+
+    const [users, setUsers] = useState(availableUsers);
+
     const handleSearch = (text) => {
         setSearchQuery(text);
         if (text.trim()) {
-            const filtered = mockUsers.filter(user =>
+            const filtered = availableUsers.filter(user =>
                 user.username.toLowerCase().includes(text.toLowerCase())
             );
             setUsers(filtered);
         } else {
-            setUsers(mockUsers);
+            setUsers(availableUsers);
         }
     };
 
@@ -58,6 +75,14 @@ export default function SearchScreen() {
         setShowProfile(true);
     };
 
+    const handleBlockUser = (user) => {
+        if (onBlockUser) {
+            onBlockUser(user);
+        }
+        // Remove from local users list
+        setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
+    };
+
     const handleBackFromProfile = () => {
         setShowProfile(false);
         setSelectedUser(null);
@@ -70,6 +95,7 @@ export default function SearchScreen() {
                 user={selectedUser}
                 onBack={handleBackFromProfile}
                 initialFollowing={following.includes(selectedUser.id)}
+                onBlockUser={handleBlockUser}
             />
         );
     }

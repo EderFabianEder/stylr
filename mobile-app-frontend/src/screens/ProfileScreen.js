@@ -15,6 +15,7 @@ import { Plus } from 'lucide-react-native';
 import EditProfileScreen from './EditProfileScreen';
 import AddPhotoScreen from './AddPhotoScreen';
 import PictureStatsScreen from './PictureStatsScreen';
+import OtherProfileScreen from './OtherProfileScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,6 +34,8 @@ export default function ProfileScreen({ user, onUpdateUser }) {
     const [selectedPicture, setSelectedPicture] = useState(null);
     const [userData, setUserData] = useState(user);
     const [myPictures, setMyPictures] = useState(initialPictures);
+    const [showOtherProfile, setShowOtherProfile] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
 
     const handleSaveProfile = (updatedData) => {
         setUserData(updatedData);
@@ -62,6 +65,12 @@ export default function ProfileScreen({ user, onUpdateUser }) {
         setMyPictures(prevPictures => prevPictures.filter(p => p.id !== pictureId));
     };
 
+    const handleUserPressFromComments = (userFromComment) => {
+        setSelectedUser(userFromComment);
+        setShowPictureStats(false);
+        setShowOtherProfile(true);
+    };
+
     // Show Edit Profile Screen
     if (showEditScreen) {
         return (
@@ -83,6 +92,20 @@ export default function ProfileScreen({ user, onUpdateUser }) {
         );
     }
 
+    // Show Other User Profile (from comments)
+    if (showOtherProfile && selectedUser) {
+        return (
+            <OtherProfileScreen
+                user={selectedUser}
+                onBack={() => {
+                    setShowOtherProfile(false);
+                    setSelectedUser(null);
+                }}
+                initialFollowing={false}
+            />
+        );
+    }
+
     // Show Picture Stats Screen
     if (showPictureStats && selectedPicture) {
         return (
@@ -95,6 +118,7 @@ export default function ProfileScreen({ user, onUpdateUser }) {
                 onDelete={handleDeletePicture}
                 currentUser={userData}
                 isOwnPicture={true}
+                onUserPress={handleUserPressFromComments}
             />
         );
     }

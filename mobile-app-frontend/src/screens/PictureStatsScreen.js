@@ -55,7 +55,8 @@ export default function PictureStatsScreen({
                                                onClose,
                                                onDelete,
                                                currentUser,
-                                               isOwnPicture = false
+                                               isOwnPicture = false,
+                                               onUserPress
                                            }) {
     const [comments, setComments] = useState(mockComments);
     const [newComment, setNewComment] = useState('');
@@ -76,6 +77,19 @@ export default function PictureStatsScreen({
             setComments([comment, ...comments]);
             setNewComment('');
             setStats(prev => ({ ...prev, comments: prev.comments + 1 }));
+        }
+    };
+
+    const handleUsernamePress = (username) => {
+        if (onUserPress) {
+            // Create a user object from the username
+            const userFromComment = {
+                id: username,
+                username: username,
+                followers: Math.floor(Math.random() * 5000),
+                following: Math.floor(Math.random() * 500),
+            };
+            onUserPress(userFromComment);
         }
     };
 
@@ -109,28 +123,35 @@ export default function PictureStatsScreen({
 
     const renderComment = ({ item }) => (
         <View style={styles.commentItem}>
-            {item.profilePhoto ? (
-                <View style={styles.commentAvatarContainer}>
-                    <Image
-                        source={{ uri: item.profilePhoto }}
-                        style={styles.commentAvatarImage}
-                    />
-                </View>
-            ) : (
-                <LinearGradient
-                    colors={['#FF5A5F', '#CE494D']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.commentAvatar}
-                >
-                    <Text style={styles.commentAvatarText}>
-                        {item.username.charAt(0).toUpperCase()}
-                    </Text>
-                </LinearGradient>
-            )}
+            <TouchableOpacity
+                onPress={() => handleUsernamePress(item.username)}
+                activeOpacity={0.7}
+            >
+                {item.profilePhoto ? (
+                    <View style={styles.commentAvatarContainer}>
+                        <Image
+                            source={{ uri: item.profilePhoto }}
+                            style={styles.commentAvatarImage}
+                        />
+                    </View>
+                ) : (
+                    <LinearGradient
+                        colors={['#FF5A5F', '#CE494D']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.commentAvatar}
+                    >
+                        <Text style={styles.commentAvatarText}>
+                            {item.username.charAt(0).toUpperCase()}
+                        </Text>
+                    </LinearGradient>
+                )}
+            </TouchableOpacity>
             <View style={styles.commentContent}>
                 <View style={styles.commentHeader}>
-                    <Text style={styles.commentUsername}>{item.username}</Text>
+                    <TouchableOpacity onPress={() => handleUsernamePress(item.username)}>
+                        <Text style={styles.commentUsername}>{item.username}</Text>
+                    </TouchableOpacity>
                     <Text style={styles.commentTimestamp}>{item.timestamp}</Text>
                 </View>
                 <Text style={styles.commentText}>{item.text}</Text>
@@ -573,7 +594,6 @@ const styles = StyleSheet.create({
     },
     modalButtons: {
         flexDirection: 'row',
-        gap: 12,
     },
     cancelButton: {
         paddingVertical: 12,
@@ -582,6 +602,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f5f5',
         borderWidth: 1,
         borderColor: '#e0e0e0',
+        marginRight: 12,
     },
     cancelButtonText: {
         fontSize: 15,

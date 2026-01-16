@@ -25,10 +25,11 @@ import {
     Info,
     User,
     AlertTriangle,
-    X
+    X,
+    UserX
 } from 'lucide-react-native';
 
-export default function SettingsScreen({ onLogout, user }) {
+export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUnblockUser }) {
     // Privacy settings
     const [isProfilePublic, setIsProfilePublic] = useState(true);
 
@@ -42,6 +43,7 @@ export default function SettingsScreen({ onLogout, user }) {
     const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
     const [showAbout, setShowAbout] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [showBlockedUsers, setShowBlockedUsers] = useState(false);
 
     // Change password form
     const [currentPassword, setCurrentPassword] = useState('');
@@ -471,6 +473,78 @@ export default function SettingsScreen({ onLogout, user }) {
         </Modal>
     );
 
+    // Blocked Users Modal
+    const BlockedUsersModal = () => (
+        <Modal
+            visible={showBlockedUsers}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowBlockedUsers(false)}
+        >
+            <View style={styles.fullModalContainer}>
+                <LinearGradient
+                    colors={['#FF5A5F', '#CE494D']}
+                    style={styles.fullModalHeader}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                >
+                    <TouchableOpacity onPress={() => setShowBlockedUsers(false)} style={styles.modalBackButton}>
+                        <X size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.fullModalTitle}>Blocked Accounts</Text>
+                    <View style={{ width: 40 }} />
+                </LinearGradient>
+                <ScrollView style={styles.fullModalContent}>
+                    {blockedUsers.length === 0 ? (
+                        <View style={styles.emptyBlockedContainer}>
+                            <UserX size={60} color="#ccc" strokeWidth={1.5} />
+                            <Text style={styles.emptyBlockedTitle}>No Blocked Accounts</Text>
+                            <Text style={styles.emptyBlockedText}>
+                                When you block someone, they'll appear here.
+                            </Text>
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.blockedCount}>
+                                {blockedUsers.length} blocked {blockedUsers.length === 1 ? 'account' : 'accounts'}
+                            </Text>
+                            {blockedUsers.map((blockedUser) => (
+                                <View key={blockedUser.id} style={styles.blockedUserItem}>
+                                    <LinearGradient
+                                        colors={['#FF5A5F', '#CE494D']}
+                                        style={styles.blockedUserAvatar}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                    >
+                                        <Text style={styles.blockedUserAvatarText}>
+                                            {blockedUser.username.charAt(0).toUpperCase()}
+                                        </Text>
+                                    </LinearGradient>
+                                    <View style={styles.blockedUserInfo}>
+                                        <Text style={styles.blockedUserName}>{blockedUser.username}</Text>
+                                        <Text style={styles.blockedUserHandle}>@{blockedUser.username.toLowerCase()}</Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.unblockButton}
+                                        onPress={() => {
+                                            if (onUnblockUser) {
+                                                onUnblockUser(blockedUser.id);
+                                            }
+                                        }}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.unblockButtonText}>Unblock</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </>
+                    )}
+                    <View style={styles.legalBottomPadding} />
+                </ScrollView>
+            </View>
+        </Modal>
+    );
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -482,6 +556,7 @@ export default function SettingsScreen({ onLogout, user }) {
             <TermsModal />
             <PrivacyPolicyModal />
             <AboutModal />
+            <BlockedUsersModal />
 
             {/* Header */}
             <LinearGradient
@@ -532,6 +607,12 @@ export default function SettingsScreen({ onLogout, user }) {
                         subtitle={isProfilePublic ? "Everyone can see your profile" : "Only followers can see your profile"}
                         value={isProfilePublic}
                         onValueChange={setIsProfilePublic}
+                    />
+                    <SettingItem
+                        icon={UserX}
+                        title="Blocked Accounts"
+                        subtitle={`${blockedUsers.length} blocked ${blockedUsers.length === 1 ? 'account' : 'accounts'}`}
+                        onPress={() => setShowBlockedUsers(true)}
                     />
                 </View>
 
@@ -703,7 +784,6 @@ const styles = StyleSheet.create({
     modalButtons: {
         flexDirection: 'row',
         justifyContent: 'center',
-        gap: 12,
     },
     cancelButton: {
         paddingVertical: 12,
@@ -712,6 +792,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f5f5f5',
         borderWidth: 1,
         borderColor: '#e0e0e0',
+        marginRight: 12,
     },
     cancelButtonText: {
         fontSize: 15,
@@ -850,5 +931,76 @@ const styles = StyleSheet.create({
         color: '#999',
         textAlign: 'center',
         marginTop: 20,
+    },
+    // Blocked users styles
+    emptyBlockedContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 60,
+    },
+    emptyBlockedTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginTop: 20,
+    },
+    emptyBlockedText: {
+        fontSize: 14,
+        color: '#888',
+        textAlign: 'center',
+        marginTop: 8,
+        paddingHorizontal: 40,
+    },
+    blockedCount: {
+        fontSize: 14,
+        color: '#888',
+        marginBottom: 15,
+    },
+    blockedUserItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        padding: 12,
+        borderRadius: 12,
+        marginBottom: 10,
+    },
+    blockedUserAvatar: {
+        width: 45,
+        height: 45,
+        borderRadius: 23,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    blockedUserAvatarText: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    blockedUserInfo: {
+        flex: 1,
+    },
+    blockedUserName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+    },
+    blockedUserHandle: {
+        fontSize: 13,
+        color: '#888',
+        marginTop: 2,
+    },
+    unblockButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderRadius: 20,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#FF5A5F',
+    },
+    unblockButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#FF5A5F',
     },
 });

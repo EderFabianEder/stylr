@@ -9,10 +9,11 @@ import {
     Dimensions,
     StatusBar,
     ScrollView,
-    Platform
+    Platform,
+    Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MessageCircle } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, UserX, MoreVertical } from 'lucide-react-native';
 import PictureStatsScreen from './PictureStatsScreen';
 
 const { width, height } = Dimensions.get('window');
@@ -27,10 +28,13 @@ const userPictures = [
     { id: '6', image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400', description: 'Beach day 🏖️' },
 ];
 
-export default function OtherProfileScreen({ user, onBack, initialFollowing = false }) {
+export default function OtherProfileScreen({ user, onBack, initialFollowing = false, onBlockUser }) {
     const [isFollowing, setIsFollowing] = useState(initialFollowing);
     const [showPictureStats, setShowPictureStats] = useState(false);
     const [selectedPicture, setSelectedPicture] = useState(null);
+    const [showBlockModal, setShowBlockModal] = useState(false);
+    const [showNestedProfile, setShowNestedProfile] = useState(false);
+    const [nestedUser, setNestedUser] = useState(null);
 
     const handleFollowToggle = () => {
         setIsFollowing(!isFollowing);
@@ -40,6 +44,75 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
         setSelectedPicture(picture);
         setShowPictureStats(true);
     };
+
+    const handleUserPressFromComments = (userFromComment) => {
+        setNestedUser(userFromComment);
+        setShowPictureStats(false);
+        setShowNestedProfile(true);
+    };
+
+    const handleBlockUser = () => {
+        setShowBlockModal(false);
+        if (onBlockUser) {
+            onBlockUser(user);
+        }
+        onBack();
+    };
+
+    // Block User Modal
+    const BlockUserModal = () => (
+        <Modal
+            visible={showBlockModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowBlockModal(false)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <View style={styles.modalIconContainer}>
+                        <UserX size={40} color="#FF5A5F" strokeWidth={1.5} />
+                    </View>
+                    <Text style={styles.modalTitle}>Block {user?.username}?</Text>
+                    <Text style={styles.modalMessage}>
+                        They won't be able to find your profile, posts, or contact you. They won't be notified that you blocked them.
+                    </Text>
+                    <View style={styles.modalButtons}>
+                        <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => setShowBlockModal(false)}
+                        >
+                            <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleBlockUser}>
+                            <LinearGradient
+                                colors={['#FF5A5F', '#CE494D']}
+                                style={styles.blockConfirmButton}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                            >
+                                <Text style={styles.blockConfirmText}>Block</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+
+    // Show Nested Profile (from comments)
+    if (showNestedProfile && nestedUser) {
+        return (
+            <OtherProfileScreen
+                user={nestedUser}
+                onBack={() => {
+                    setShowNestedProfile(false);
+                    setNestedUser(null);
+                }}
+                initialFollowing={false}
+                onBlockUser={onBlockUser}
+            />
+        );
+    }
 
     // Show Picture Stats Screen
     if (showPictureStats && selectedPicture) {
@@ -52,6 +125,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                 }}
                 currentUser={null}
                 isOwnPicture={false}
+                onUserPress={handleUserPressFromComments}
             />
         );
     }
@@ -74,6 +148,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
+            <BlockUserModal />
 
             <ScrollView
                 style={styles.scrollView}
@@ -89,6 +164,15 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                         activeOpacity={0.7}
                     >
                         <ArrowLeft size={24} color="#FFF" strokeWidth={2.5} />
+                    </TouchableOpacity>
+
+                    {/* Block Button */}
+                    <TouchableOpacity
+                        style={styles.moreButton}
+                        onPress={() => setShowBlockModal(true)}
+                        activeOpacity={0.7}
+                    >
+                        <MoreVertical size={24} color="#FFF" strokeWidth={2.5} />
                     </TouchableOpacity>
 
                     <View style={styles.largeProfilePlaceholder}>
@@ -335,10 +419,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 25,
-        gap: 12,
     },
     followButtonWrapper: {
         flex: 1,
+        marginRight: 12,
     },
     followButton: {
         paddingVertical: 14,
@@ -438,5 +522,84 @@ const styles = StyleSheet.create({
     },
     bottomPadding: {
         height: 40,
+    },
+    // More button
+    moreButton: {
+        position: 'absolute',
+        top: 50,
+        right: 20,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10,
+    },
+    // Block Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 25,
+        width: '100%',
+        maxWidth: 340,
+        alignItems: 'center',
+    },
+    modalIconContainer: {
+        width: 70,
+        height: 70,
+        borderRadius: 35,
+        backgroundColor: '#fff0f0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    modalMessage: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 25,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+    },
+    cancelButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 25,
+        borderRadius: 25,
+        backgroundColor: '#f5f5f5',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        marginRight: 12,
+    },
+    cancelButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#666',
+    },
+    blockConfirmButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 25,
+        borderRadius: 25,
+    },
+    blockConfirmText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#fff',
     },
 });

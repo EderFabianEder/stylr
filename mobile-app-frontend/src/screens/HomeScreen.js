@@ -42,7 +42,7 @@ const clothingItems = [
     },
 ];
 
-export default function HomeScreen({ user }) {
+export default function HomeScreen({ user, onBlockUser }) {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
@@ -159,6 +159,7 @@ export default function HomeScreen({ user }) {
                     item={currentItem}
                     onClose={() => setShowComments(false)}
                     currentUser={user}
+                    onBlockUser={onBlockUser}
                 />
             </Modal>
 

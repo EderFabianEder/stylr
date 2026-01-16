@@ -334,11 +334,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         marginTop: 25,
-        gap: 15,
     },
     uploadButton: {
         flex: 1,
         maxWidth: 150,
+        marginHorizontal: 7,
     },
     uploadButtonGradient: {
         flexDirection: 'row',

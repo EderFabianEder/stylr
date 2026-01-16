@@ -16,6 +16,7 @@ export default function App() {
     const [currentScreen, setCurrentScreen] = useState('login');
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('home');
+    const [blockedUsers, setBlockedUsers] = useState([]);
 
     const handleLogin = (userData) => {
         setUser(userData);
@@ -33,6 +34,14 @@ export default function App() {
             ...prevUser,
             ...updatedUserData
         }));
+    };
+
+    const handleBlockUser = (userToBlock) => {
+        setBlockedUsers(prev => [...prev, userToBlock]);
+    };
+
+    const handleUnblockUser = (userId) => {
+        setBlockedUsers(prev => prev.filter(u => u.id !== userId));
     };
 
     const handleLogout = () => {
@@ -57,10 +66,10 @@ export default function App() {
             <StatusBar barStyle="light-content" backgroundColor="#FF5A5F" />
 
             <View style={styles.contentArea}>
-                {activeTab === 'home' && <HomeScreen user={user} />}
+                {activeTab === 'home' && <HomeScreen user={user} onBlockUser={handleBlockUser} />}
                 {activeTab === 'profile' && <ProfileScreen user={user} onUpdateUser={handleUpdateProfile} onLogout={handleLogout} />}
-                {activeTab === 'search' && <SearchScreen />}
-                {activeTab === 'settings' && <SettingsScreen user={user} onLogout={handleLogout} />}
+                {activeTab === 'search' && <SearchScreen blockedUsers={blockedUsers} onBlockUser={handleBlockUser} />}
+                {activeTab === 'settings' && <SettingsScreen user={user} onLogout={handleLogout} blockedUsers={blockedUsers} onUnblockUser={handleUnblockUser} />}
             </View>
 
             {/* Bottom Navigation with Lucide Icons */}
