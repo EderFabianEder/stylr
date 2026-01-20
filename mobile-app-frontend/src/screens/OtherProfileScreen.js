@@ -28,7 +28,7 @@ const userPictures = [
     { id: '6', image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400', description: 'Beach day 🏖️' },
 ];
 
-export default function OtherProfileScreen({ user, onBack, initialFollowing = false, onBlockUser }) {
+export default function OtherProfileScreen({ user, onBack, initialFollowing = false, onBlockUser, currentUser }) {
     const [isFollowing, setIsFollowing] = useState(initialFollowing);
     const [showPictureStats, setShowPictureStats] = useState(false);
     const [selectedPicture, setSelectedPicture] = useState(null);
@@ -110,6 +110,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                 }}
                 initialFollowing={false}
                 onBlockUser={onBlockUser}
+                currentUser={currentUser}
             />
         );
     }
@@ -123,7 +124,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                     setShowPictureStats(false);
                     setSelectedPicture(null);
                 }}
-                currentUser={null}
+                currentUser={currentUser}
                 isOwnPicture={false}
                 onUserPress={handleUserPressFromComments}
             />

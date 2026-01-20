@@ -102,6 +102,7 @@ export default function ProfileScreen({ user, onUpdateUser }) {
                     setSelectedUser(null);
                 }}
                 initialFollowing={false}
+                currentUser={userData}
             />
         );
     }

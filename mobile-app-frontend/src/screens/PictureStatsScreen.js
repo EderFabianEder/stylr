@@ -16,29 +16,52 @@ import {
     Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, Heart, MessageCircle, Eye, Share2, Trash2, Send, X } from 'lucide-react-native';
+import { ArrowLeft, Heart, MessageCircle, Eye, Share2, Trash2, Send, X, Reply, ChevronDown, ChevronUp } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
-// Mock Comments
+// Mock Comments with replies
 const mockComments = [
     {
         id: 1,
         username: 'sarah_style',
         text: 'Love this dress! Where can I get it?',
         timestamp: '2h ago',
+        replies: [
+            {
+                id: 101,
+                username: 'fashion_lover',
+                text: 'I think it\'s from Zara!',
+                timestamp: '1h ago',
+            },
+        ],
     },
     {
         id: 2,
         username: 'fashion_lover',
         text: 'Perfect for summer! 😍',
         timestamp: '5h ago',
+        replies: [],
     },
     {
         id: 3,
         username: 'minimal_john',
         text: 'Clean style, very elegant',
         timestamp: '1d ago',
+        replies: [
+            {
+                id: 301,
+                username: 'style_queen',
+                text: 'Totally agree!',
+                timestamp: '20h ago',
+            },
+            {
+                id: 302,
+                username: 'urban_chic',
+                text: 'Yes, love the minimalist vibe',
+                timestamp: '18h ago',
+            },
+        ],
     },
 ];
 
@@ -63,21 +86,68 @@ export default function PictureStatsScreen({
     const [stats, setStats] = useState(mockStats);
     const [isLiked, setIsLiked] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [expandedReplies, setExpandedReplies] = useState({});
 
     const handleSendComment = () => {
         if (newComment.trim()) {
-            const comment = {
-                id: Date.now(),
-                username: currentUser?.username || 'you',
-                text: newComment,
-                timestamp: 'Just now',
-                isCurrentUser: true,
-                profilePhoto: currentUser?.profilePhoto,
-            };
-            setComments([comment, ...comments]);
+            if (replyingTo) {
+                // Add reply to existing comment
+                const reply = {
+                    id: Date.now(),
+                    username: currentUser?.username || 'you',
+                    text: newComment,
+                    timestamp: 'Just now',
+                    isCurrentUser: true,
+                    profilePhoto: currentUser?.profilePhoto,
+                };
+                setComments(prevComments =>
+                    prevComments.map(comment => {
+                        if (comment.id === replyingTo.id) {
+                            return {
+                                ...comment,
+                                replies: [...(comment.replies || []), reply]
+                            };
+                        }
+                        return comment;
+                    })
+                );
+                setReplyingTo(null);
+                // Expand replies for this comment
+                setExpandedReplies(prev => ({ ...prev, [replyingTo.id]: true }));
+            } else {
+                // Add new comment
+                const comment = {
+                    id: Date.now(),
+                    username: currentUser?.username || 'you',
+                    text: newComment,
+                    timestamp: 'Just now',
+                    isCurrentUser: true,
+                    profilePhoto: currentUser?.profilePhoto,
+                    replies: [],
+                };
+                setComments([comment, ...comments]);
+            }
             setNewComment('');
             setStats(prev => ({ ...prev, comments: prev.comments + 1 }));
         }
+    };
+
+    const handleReply = (comment) => {
+        setReplyingTo(comment);
+        setNewComment(`@${comment.username} `);
+    };
+
+    const toggleReplies = (commentId) => {
+        setExpandedReplies(prev => ({
+            ...prev,
+            [commentId]: !prev[commentId]
+        }));
+    };
+
+    const cancelReply = () => {
+        setReplyingTo(null);
+        setNewComment('');
     };
 
     const handleUsernamePress = (username) => {
@@ -121,17 +191,17 @@ export default function PictureStatsScreen({
         }
     };
 
-    const renderComment = ({ item }) => (
-        <View style={styles.commentItem}>
+    const renderReply = (reply, parentComment) => (
+        <View key={reply.id} style={styles.replyItem}>
             <TouchableOpacity
-                onPress={() => handleUsernamePress(item.username)}
+                onPress={() => handleUsernamePress(reply.username)}
                 activeOpacity={0.7}
             >
-                {item.profilePhoto ? (
-                    <View style={styles.commentAvatarContainer}>
+                {reply.profilePhoto ? (
+                    <View style={styles.replyAvatarContainer}>
                         <Image
-                            source={{ uri: item.profilePhoto }}
-                            style={styles.commentAvatarImage}
+                            source={{ uri: reply.profilePhoto }}
+                            style={styles.replyAvatarImage}
                         />
                     </View>
                 ) : (
@@ -139,23 +209,94 @@ export default function PictureStatsScreen({
                         colors={['#FF5A5F', '#CE494D']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
-                        style={styles.commentAvatar}
+                        style={styles.replyAvatar}
                     >
-                        <Text style={styles.commentAvatarText}>
-                            {item.username.charAt(0).toUpperCase()}
+                        <Text style={styles.replyAvatarText}>
+                            {reply.username.charAt(0).toUpperCase()}
                         </Text>
                     </LinearGradient>
                 )}
             </TouchableOpacity>
-            <View style={styles.commentContent}>
+            <View style={styles.replyContent}>
                 <View style={styles.commentHeader}>
-                    <TouchableOpacity onPress={() => handleUsernamePress(item.username)}>
-                        <Text style={styles.commentUsername}>{item.username}</Text>
+                    <TouchableOpacity onPress={() => handleUsernamePress(reply.username)}>
+                        <Text style={styles.replyUsername}>{reply.username}</Text>
                     </TouchableOpacity>
-                    <Text style={styles.commentTimestamp}>{item.timestamp}</Text>
+                    <Text style={styles.replyTimestamp}>{reply.timestamp}</Text>
                 </View>
-                <Text style={styles.commentText}>{item.text}</Text>
+                <Text style={styles.replyText}>{reply.text}</Text>
             </View>
+        </View>
+    );
+
+    const renderComment = ({ item }) => (
+        <View style={styles.commentContainer}>
+            <View style={styles.commentItem}>
+                <TouchableOpacity
+                    onPress={() => handleUsernamePress(item.username)}
+                    activeOpacity={0.7}
+                >
+                    {item.profilePhoto ? (
+                        <View style={styles.commentAvatarContainer}>
+                            <Image
+                                source={{ uri: item.profilePhoto }}
+                                style={styles.commentAvatarImage}
+                            />
+                        </View>
+                    ) : (
+                        <LinearGradient
+                            colors={['#FF5A5F', '#CE494D']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.commentAvatar}
+                        >
+                            <Text style={styles.commentAvatarText}>
+                                {item.username.charAt(0).toUpperCase()}
+                            </Text>
+                        </LinearGradient>
+                    )}
+                </TouchableOpacity>
+                <View style={styles.commentContent}>
+                    <View style={styles.commentHeader}>
+                        <TouchableOpacity onPress={() => handleUsernamePress(item.username)}>
+                            <Text style={styles.commentUsername}>{item.username}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.commentTimestamp}>{item.timestamp}</Text>
+                    </View>
+                    <Text style={styles.commentText}>{item.text}</Text>
+                    <View style={styles.commentActions}>
+                        <TouchableOpacity
+                            style={styles.replyButton}
+                            onPress={() => handleReply(item)}
+                            activeOpacity={0.7}
+                        >
+                            <Reply size={14} color="#888" strokeWidth={2} />
+                            <Text style={styles.replyButtonText}>Reply</Text>
+                        </TouchableOpacity>
+                        {item.replies && item.replies.length > 0 && (
+                            <TouchableOpacity
+                                style={styles.viewRepliesButton}
+                                onPress={() => toggleReplies(item.id)}
+                                activeOpacity={0.7}
+                            >
+                                {expandedReplies[item.id] ? (
+                                    <ChevronUp size={14} color="#FF5A5F" strokeWidth={2} />
+                                ) : (
+                                    <ChevronDown size={14} color="#FF5A5F" strokeWidth={2} />
+                                )}
+                                <Text style={styles.viewRepliesText}>
+                                    {expandedReplies[item.id] ? 'Hide' : 'View'} {item.replies.length} {item.replies.length === 1 ? 'reply' : 'replies'}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+            </View>
+            {expandedReplies[item.id] && item.replies && item.replies.length > 0 && (
+                <View style={styles.repliesContainer}>
+                    {item.replies.map(reply => renderReply(reply, item))}
+                </View>
+            )}
         </View>
     );
 
@@ -321,11 +462,23 @@ export default function PictureStatsScreen({
                     <View style={styles.bottomPadding} />
                 </ScrollView>
 
+                {/* Reply indicator */}
+                {replyingTo && (
+                    <View style={styles.replyingToContainer}>
+                        <Text style={styles.replyingToText}>
+                            Replying to <Text style={styles.replyingToUsername}>@{replyingTo.username}</Text>
+                        </Text>
+                        <TouchableOpacity onPress={cancelReply} activeOpacity={0.7}>
+                            <X size={18} color="#666" strokeWidth={2} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 {/* Input Bar */}
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Add a comment..."
+                        placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : "Add a comment..."}
                         placeholderTextColor="#999"
                         value={newComment}
                         onChangeText={setNewComment}
@@ -618,5 +771,110 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '600',
         color: '#fff',
+    },
+    // Comment container for grouping comments and replies
+    commentContainer: {
+        marginBottom: 15,
+    },
+    // Reply styles
+    commentActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    replyButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginRight: 15,
+    },
+    replyButtonText: {
+        fontSize: 12,
+        color: '#888',
+        marginLeft: 4,
+        fontWeight: '500',
+    },
+    viewRepliesButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    viewRepliesText: {
+        fontSize: 12,
+        color: '#FF5A5F',
+        marginLeft: 4,
+        fontWeight: '500',
+    },
+    repliesContainer: {
+        marginLeft: 52,
+        marginTop: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: '#e0e0e0',
+        paddingLeft: 12,
+    },
+    replyItem: {
+        flexDirection: 'row',
+        marginBottom: 10,
+        backgroundColor: '#f8f9fa',
+        padding: 10,
+        borderRadius: 10,
+    },
+    replyAvatarContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        marginRight: 10,
+        overflow: 'hidden',
+    },
+    replyAvatarImage: {
+        width: '100%',
+        height: '100%',
+    },
+    replyAvatar: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    replyAvatarText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    replyContent: {
+        flex: 1,
+    },
+    replyUsername: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#FF5A5F',
+    },
+    replyTimestamp: {
+        fontSize: 11,
+        color: '#999',
+    },
+    replyText: {
+        fontSize: 13,
+        color: '#555',
+        lineHeight: 18,
+    },
+    // Replying to indicator
+    replyingToContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#f0f0f0',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderTopWidth: 1,
+        borderTopColor: '#e0e0e0',
+    },
+    replyingToText: {
+        fontSize: 13,
+        color: '#666',
+    },
+    replyingToUsername: {
+        fontWeight: '600',
+        color: '#FF5A5F',
     },
 });

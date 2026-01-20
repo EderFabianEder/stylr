@@ -68,7 +68,7 @@ export default function App() {
             <View style={styles.contentArea}>
                 {activeTab === 'home' && <HomeScreen user={user} onBlockUser={handleBlockUser} />}
                 {activeTab === 'profile' && <ProfileScreen user={user} onUpdateUser={handleUpdateProfile} onLogout={handleLogout} />}
-                {activeTab === 'search' && <SearchScreen blockedUsers={blockedUsers} onBlockUser={handleBlockUser} />}
+                {activeTab === 'search' && <SearchScreen blockedUsers={blockedUsers} onBlockUser={handleBlockUser} currentUser={user} />}
                 {activeTab === 'settings' && <SettingsScreen user={user} onLogout={handleLogout} blockedUsers={blockedUsers} onUnblockUser={handleUnblockUser} />}
             </View>
 

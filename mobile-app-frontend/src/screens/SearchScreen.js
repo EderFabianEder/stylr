@@ -36,7 +36,7 @@ const mockUsers = [
     { id: 8, username: 'elegant_ella', followers: 987, following: 345 },
 ];
 
-export default function SearchScreen({ blockedUsers = [], onBlockUser }) {
+export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUser }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [following, setFollowing] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -96,6 +96,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser }) {
                 onBack={handleBackFromProfile}
                 initialFollowing={following.includes(selectedUser.id)}
                 onBlockUser={handleBlockUser}
+                currentUser={currentUser}
             />
         );
     }
