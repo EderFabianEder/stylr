@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STYLR - Discover Your Style</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fff;
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 20px 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.05);
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            font-size: 15px;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #FF5A5F;
+        }
+
+        .nav-cta {
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(255, 90, 95, 0.3);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 120px 50px 80px;
+            background: linear-gradient(135deg, #fff5f5 0%, #ffffff 50%, #fff5f5 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 80%;
+            height: 150%;
+            background: radial-gradient(circle, rgba(255, 90, 95, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            flex: 1;
+            max-width: 600px;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(255, 90, 95, 0.1);
+            color: #FF5A5F;
+            padding: 8px 20px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+
+        .hero h1 {
+            font-size: 64px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 25px;
+            color: #1a1a1a;
+        }
+
+        .hero p {
+            font-size: 20px;
+            color: #666;
+            line-height: 1.7;
+            margin-bottom: 40px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            color: white;
+            padding: 18px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(255, 90, 95, 0.35);
+        }
+
+        .btn-secondary {
+            color: #333;
+            padding: 18px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            border-color: #FF5A5F;
+            color: #FF5A5F;
+        }
+
+        .hero-image {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .phone-mockup {
+            position: relative;
+            width: 320px;
+            height: 650px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+            border-radius: 50px;
+            padding: 12px;
+            box-shadow: 0 50px 100px rgba(0, 0, 0, 0.2);
+            transform: rotate(5deg);
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #FF5A5F 0%, #CE494D 30%, #f5f5f5 30%);
+            border-radius: 40px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .phone-header {
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            padding: 50px 20px 20px;
+            text-align: center;
+        }
+
+        .phone-header h3 {
+            color: white;
+            font-size: 20px;
+            letter-spacing: 3px;
+            font-weight: 700;
+        }
+
+        .phone-content {
+            padding: 20px;
+        }
+
+        .phone-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .phone-card-image {
+            height: 250px;
+            background: linear-gradient(135deg, #ffeef0 0%, #ffe0e3 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 80px;
+        }
+
+        .phone-card-info {
+            padding: 15px;
+        }
+
+        .phone-card-info h4 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .phone-card-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .phone-avatar {
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            border-radius: 50%;
+        }
+
+        .phone-card-user span {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .floating-element {
+            position: absolute;
+            background: white;
+            border-radius: 20px;
+            padding: 15px 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .floating-element.likes {
+            top: 20%;
+            left: -60px;
+            animation-delay: 0s;
+        }
+
+        .floating-element.followers {
+            bottom: 30%;
+            right: -80px;
+            animation-delay: 1s;
+        }
+
+        .floating-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+        }
+
+        .floating-text h5 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .floating-text span {
+            font-size: 12px;
+            color: #888;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        /* Features Section */
+        .features {
+            padding: 120px 50px;
+            background: #fff;
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 80px;
+        }
+
+        .section-header h2 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+
+        .section-header p {
+            font-size: 18px;
+            color: #666;
+            line-height: 1.7;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: #fafafa;
+            border-radius: 24px;
+            padding: 40px;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        .feature-card:hover {
+            background: #fff;
+            border-color: #ffe0e3;
+            transform: translateY(-10px);
+            box-shadow: 0 20px 60px rgba(255, 90, 95, 0.1);
+        }
+
+        .feature-icon {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            margin-bottom: 25px;
+        }
+
+        .feature-card h3 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+        }
+
+        .feature-card p {
+            font-size: 15px;
+            color: #666;
+            line-height: 1.7;
+        }
+
+        /* How It Works */
+        .how-it-works {
+            padding: 120px 50px;
+            background: linear-gradient(180deg, #fff5f5 0%, #ffffff 100%);
+        }
+
+        .steps-container {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .step {
+            text-align: center;
+            flex: 1;
+            position: relative;
+        }
+
+        .step:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            top: 50px;
+            right: -30px;
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, #FF5A5F, #CE494D);
+        }
+
+        .step-number {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 800;
+            color: white;
+            margin: 0 auto 30px;
+            box-shadow: 0 15px 40px rgba(255, 90, 95, 0.3);
+        }
+
+        .step h3 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+        }
+
+        .step p {
+            font-size: 15px;
+            color: #666;
+            line-height: 1.7;
+        }
+
+        /* Testimonials */
+        .testimonials {
+            padding: 120px 50px;
+            background: #fff;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .testimonial-card {
+            background: #fafafa;
+            border-radius: 24px;
+            padding: 40px;
+            position: relative;
+        }
+
+        .testimonial-card::before {
+            content: '"';
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 80px;
+            font-weight: 800;
+            color: #FF5A5F;
+            opacity: 0.1;
+            line-height: 1;
+        }
+
+        .testimonial-text {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .testimonial-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .testimonial-info h4 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
+
+        .testimonial-info span {
+            font-size: 13px;
+            color: #888;
+        }
+
+        /* Stats Section */
+        .stats {
+            padding: 80px 50px;
+            background: linear-gradient(135deg, #FF5A5F 0%, #CE494D 100%);
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: center;
+            gap: 100px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .stat-item {
+            text-align: center;
+            color: white;
+        }
+
+        .stat-number {
+            font-size: 56px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* CTA Section */
+        .cta {
+            padding: 120px 50px;
+            background: #1a1a1a;
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-size: 48px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .cta p {
+            font-size: 18px;
+            color: #888;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .app-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .app-btn {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #333;
+            padding: 15px 30px;
+            border-radius: 15px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .app-btn:hover {
+            background: #444;
+            transform: translateY(-3px);
+        }
+
+        .app-btn-icon {
+            font-size: 32px;
+        }
+
+        .app-btn-text {
+            text-align: left;
+        }
+
+        .app-btn-text span {
+            font-size: 11px;
+            color: #888;
+            display: block;
+        }
+
+        .app-btn-text strong {
+            font-size: 18px;
+            color: white;
+        }
+
+        /* Footer */
+        footer {
+            padding: 60px 50px 30px;
+            background: #111;
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto 50px;
+        }
+
+        .footer-brand {
+            max-width: 300px;
+        }
+
+        .footer-logo {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            color: #FF5A5F;
+            margin-bottom: 20px;
+        }
+
+        .footer-brand p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 80px;
+        }
+
+        .footer-column h4 {
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+
+        .footer-column ul {
+            list-style: none;
+        }
+
+        .footer-column li {
+            margin-bottom: 12px;
+        }
+
+        .footer-column a {
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .footer-column a:hover {
+            color: #FF5A5F;
+        }
+
+        .footer-bottom {
+            border-top: 1px solid #222;
+            padding-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-bottom p {
+            color: #555;
+            font-size: 14px;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 20px;
+        }
+
+        .social-links a {
+            width: 40px;
+            height: 40px;
+            background: #222;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .social-links a:hover {
+            background: #FF5A5F;
+            color: white;
+        }
+
+        /* Mobile Menu */
+        .mobile-menu-btn {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .mobile-menu-btn span {
+            width: 25px;
+            height: 3px;
+            background: #333;
+            border-radius: 3px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .features-grid,
+            .testimonials-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .steps-container {
+                flex-wrap: wrap;
+            }
+
+            .step:not(:last-child)::after {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                padding: 15px 25px;
+            }
+
+            .nav-links,
+            .nav-cta {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            .hero {
+                flex-direction: column;
+                padding: 120px 25px 60px;
+                text-align: center;
+            }
+
+            .hero h1 {
+                font-size: 40px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn-primary,
+            .btn-secondary {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .hero-image {
+                margin-top: 60px;
+            }
+
+            .phone-mockup {
+                width: 260px;
+                height: 530px;
+                transform: rotate(0);
+            }
+
+            .floating-element {
+                display: none;
+            }
+
+            .features,
+            .how-it-works,
+            .testimonials,
+            .cta {
+                padding: 80px 25px;
+            }
+
+            .section-header h2 {
+                font-size: 32px;
+            }
+
+            .features-grid,
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-container {
+                flex-wrap: wrap;
+                gap: 40px;
+            }
+
+            .stat-item {
+                flex: 1 1 40%;
+            }
+
+            .stat-number {
+                font-size: 40px;
+            }
+
+            .cta h2 {
+                font-size: 32px;
+            }
+
+            .app-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                gap: 40px;
+            }
+
+            .footer-links {
+                flex-wrap: wrap;
+                gap: 40px;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="logo">STYLR</div>
+        <ul class="nav-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#testimonials">Testimonials</a></li>
+            <li><a href="#download">Download</a></li>
+        </ul>
+        <a href="#download" class="nav-cta">Get the App</a>
+        <button class="mobile-menu-btn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <span class="hero-badge">✨ #1 Fashion Discovery App</span>
+            <h1>Discover Your <span class="gradient-text">Perfect Style</span></h1>
+            <p>Swipe through curated fashion looks, connect with style enthusiasts, and build your personal fashion portfolio. Your style journey starts here.</p>
+            <div class="hero-buttons">
+                <a href="#download" class="btn-primary">
+                    <span>📱</span> Download Free
+                </a>
+                <a href="#how-it-works" class="btn-secondary">
+                    <span>▶</span> See How It Works
+                </a>
+            </div>
+        </div>
+        <div class="hero-image">
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div class="phone-header">
+                        <h3>STYLR</h3>
+                    </div>
+                    <div class="phone-content">
+                        <div class="phone-card">
+                            <div class="phone-card-image">👗</div>
+                            <div class="phone-card-info">
+                                <h4>Summer Collection</h4>
+                                <div class="phone-card-user">
+                                    <div class="phone-avatar"></div>
+                                    <span>@fashionista_23</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="floating-element likes">
+                <div class="floating-icon">❤️</div>
+                <div class="floating-text">
+                    <h5>2.4k</h5>
+                    <span>Likes today</span>
+                </div>
+            </div>
+            <div class="floating-element followers">
+                <div class="floating-icon">👥</div>
+                <div class="floating-text">
+                    <h5>10k+</h5>
+                    <span>Active users</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="section-header">
+            <h2>Why Choose <span class="gradient-text">STYLR</span>?</h2>
+            <p>Everything you need to discover, share, and elevate your personal style in one beautiful app.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">👆</div>
+                <h3>Swipe & Discover</h3>
+                <p>Effortlessly browse through thousands of curated fashion looks. Swipe right to save your favorites, left to skip.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📸</div>
+                <h3>Share Your Style</h3>
+                <p>Upload your outfits, build your fashion portfolio, and inspire others with your unique sense of style.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">💬</div>
+                <h3>Connect & Chat</h3>
+                <p>Follow your favorite creators, comment on looks, and build meaningful connections with style enthusiasts.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔍</div>
+                <h3>Find Inspiration</h3>
+                <p>Search for specific styles, trends, or creators. Discover new looks that match your aesthetic.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Track Your Growth</h3>
+                <p>See detailed stats on your posts, track your followers, and understand what resonates with your audience.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3>Privacy First</h3>
+                <p>Control who sees your content with flexible privacy settings. Your style, your rules.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="section-header">
+            <h2>Getting Started is <span class="gradient-text">Easy</span></h2>
+            <p>Join thousands of fashion lovers in just three simple steps.</p>
+        </div>
+        <div class="steps-container">
+            <div class="step">
+                <div class="step-number">1</div>
+                <h3>Download the App</h3>
+                <p>Get STYLR for free on iOS or Android. Create your account in seconds.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <h3>Set Up Your Profile</h3>
+                <p>Add your photo, write a bio, and customize your style preferences.</p>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <h3>Start Exploring</h3>
+                <p>Swipe through looks, follow creators, and share your own style with the world.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials" id="testimonials">
+        <div class="section-header">
+            <h2>Loved by <span class="gradient-text">Thousands</span></h2>
+            <p>See what our community has to say about their STYLR experience.</p>
+        </div>
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <p class="testimonial-text">"STYLR completely changed how I discover fashion. The swipe feature is so addictive, and I've found so many amazing creators!"</p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">S</div>
+                    <div class="testimonial-info">
+                        <h4>Sarah Mitchell</h4>
+                        <span>Fashion Blogger</span>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <p class="testimonial-text">"As a fashion creator, STYLR has been incredible for growing my audience. The engagement is real and the community is supportive."</p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">M</div>
+                    <div class="testimonial-info">
+                        <h4>Marcus Chen</h4>
+                        <span>Style Influencer</span>
+                    </div>
+                </div>
+            </div>
+            <div class="testimonial-card">
+                <p class="testimonial-text">"I love how easy it is to share my outfits and get feedback. The community here is so positive and inspiring!"</p>
+                <div class="testimonial-author">
+                    <div class="testimonial-avatar">E</div>
+                    <div class="testimonial-info">
+                        <h4>Emma Rodriguez</h4>
+                        <span>Style Enthusiast</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="stats-container">
+            <div class="stat-item">
+                <div class="stat-number">50K+</div>
+                <div class="stat-label">Active Users</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">2M+</div>
+                <div class="stat-label">Looks Shared</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">10M+</div>
+                <div class="stat-label">Daily Swipes</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">4.9</div>
+                <div class="stat-label">App Store Rating</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta" id="download">
+        <h2>Ready to Find Your <span class="gradient-text">Style</span>?</h2>
+        <p>Join the STYLR community today and start your fashion journey. It's free to download!</p>
+        <div class="app-buttons">
+            <a href="#" class="app-btn">
+                <span class="app-btn-icon">🍎</span>
+                <div class="app-btn-text">
+                    <span>Download on the</span>
+                    <strong>App Store</strong>
+                </div>
+            </a>
+            <a href="#" class="app-btn">
+                <span class="app-btn-icon">🤖</span>
+                <div class="app-btn-text">
+                    <span>Get it on</span>
+                    <strong>Google Play</strong>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <div class="footer-logo">STYLR</div>
+                <p>Discover, share, and celebrate fashion with the world's most stylish community.</p>
+            </div>
+            <div class="footer-links">
+                <div class="footer-column">
+                    <h4>Product</h4>
+                    <ul>
+                        <li><a href="#">Features</a></li>
+                        <li><a href="#">Pricing</a></li>
+                        <li><a href="#">Download</a></li>
+                        <li><a href="#">Updates</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#">About Us</a></li>
+                        <li><a href="#">Careers</a></li>
+                        <li><a href="#">Press</a></li>
+                        <li><a href="#">Contact</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Cookie Policy</a></li>
+                        <li><a href="#">GDPR</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>© 2025 STYLR. All rights reserved.</p>
+            <div class="social-links">
+                <a href="#">📘</a>
+                <a href="#">📸</a>
+                <a href="#">🐦</a>
+                <a href="#">💼</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
