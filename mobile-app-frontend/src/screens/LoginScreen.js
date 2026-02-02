@@ -8,16 +8,23 @@ import {
     SafeAreaView,
     KeyboardAvoidingView,
     Platform,
-    Alert
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { authService } from './api';
 
 export default function LoginScreen({ onLogin, onNavigateToRegister }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [errors, setErrors] = useState({});
 
     const handleLogin = async () => {
+        // Clear previous errors
+        setErrors({});
+
+        // Basic validation
         if (!email || !password) {
             Alert.alert('Error', 'Please fill all fields');
             return;
@@ -25,10 +32,28 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
 
         setIsLoading(true);
 
-        setTimeout(() => {
+        try {
+            const response = await authService.login(email, password);
+
+            // Get user data after successful login
+            const userData = await authService.getUser();
+
+            onLogin(userData.data || userData);
+        } catch (error) {
+            console.log('Login error:', error);
+
+            if (error.errors) {
+                setErrors(error.errors);
+            }
+
+            if (Platform.OS === 'web') {
+                window.alert(error.message || 'Login failed. Please check your credentials.');
+            } else {
+                Alert.alert('Login Failed', error.message || 'Please check your credentials.');
+            }
+        } finally {
             setIsLoading(false);
-            onLogin({ email });
-        }, 1000);
+        }
     };
 
     return (
@@ -56,30 +81,49 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
                     </View>
 
                     <View style={styles.formContainer}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Email"
-                            placeholderTextColor="#999"
-                            value={email}
-                            onChangeText={setEmail}
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                            autoComplete="email"
-                        />
+                        <View>
+                            <TextInput
+                                style={[styles.input, errors.email && styles.inputError]}
+                                placeholder="Email"
+                                placeholderTextColor="#999"
+                                value={email}
+                                onChangeText={(text) => {
+                                    setEmail(text);
+                                    setErrors({ ...errors, email: null });
+                                }}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                                autoComplete="email"
+                                editable={!isLoading}
+                            />
+                            {errors.email && (
+                                <Text style={styles.errorText}>{errors.email[0]}</Text>
+                            )}
+                        </View>
 
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Password"
-                            placeholderTextColor="#999"
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry
-                            autoComplete="password"
-                        />
+                        <View>
+                            <TextInput
+                                style={[styles.input, errors.password && styles.inputError]}
+                                placeholder="Password"
+                                placeholderTextColor="#999"
+                                value={password}
+                                onChangeText={(text) => {
+                                    setPassword(text);
+                                    setErrors({ ...errors, password: null });
+                                }}
+                                secureTextEntry
+                                autoComplete="password"
+                                editable={!isLoading}
+                            />
+                            {errors.password && (
+                                <Text style={styles.errorText}>{errors.password[0]}</Text>
+                            )}
+                        </View>
 
                         <TouchableOpacity
                             onPress={handleLogin}
                             disabled={isLoading}
+                            activeOpacity={0.8}
                         >
                             <LinearGradient
                                 colors={['#FF5A5F', '#CE494D']}
@@ -87,10 +131,16 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
                                 end={{ x: 1, y: 0 }}
                                 style={[styles.loginButton, isLoading && styles.buttonDisabled]}
                             >
-                                <Text style={styles.loginButtonText}>
-                                    {isLoading ? 'Loading...' : 'Login'}
-                                </Text>
+                                {isLoading ? (
+                                    <ActivityIndicator color="#fff" size="small" />
+                                ) : (
+                                    <Text style={styles.loginButtonText}>Login</Text>
+                                )}
                             </LinearGradient>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.forgotPassword}>
+                            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -174,6 +224,16 @@ const styles = StyleSheet.create({
         color: '#000',
         marginBottom: 20,
     },
+    inputError: {
+        borderColor: '#FF5A5F',
+        marginBottom: 5,
+    },
+    errorText: {
+        color: '#FF5A5F',
+        fontSize: 12,
+        marginLeft: 20,
+        marginBottom: 15,
+    },
     loginButton: {
         borderRadius: 25,
         paddingVertical: 15,
@@ -185,6 +245,8 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 5,
+        minWidth: 120,
+        alignItems: 'center',
     },
     buttonDisabled: {
         opacity: 0.6,
@@ -193,5 +255,12 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 16,
         fontWeight: '600',
+    },
+    forgotPassword: {
+        marginTop: 20,
+    },
+    forgotPasswordText: {
+        color: '#FF5A5F',
+        fontSize: 14,
     },
 });
