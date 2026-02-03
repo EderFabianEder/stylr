@@ -1,107 +1,122 @@
 // src/services/api.js
+// STYLR API Service - Vollständig basierend auf Laravel Backend
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-// Change this based on your testing environment
-const getBaseUrl = () => {
-    // For web browser
-    // return 'http://localhost:8000/api/v1';
+// API Base URL - Live Server
+const API_URL = 'https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1';
 
-    // For Android Emulator
-    // return 'http://10.0.2.2:8000/api/v1';
+// Für lokale Entwicklung:
+// const API_URL = 'http://localhost:8000/api/v1';  // Web
+// const API_URL = 'http://10.0.2.2:8000/api/v1';   // Android Emulator
+// const API_URL = 'http://192.168.x.x:8000/api/v1'; // Physical Device
 
-    // For iOS Simulator
-    // return 'http://localhost:8000/api/v1';
-
-
-    return 'http://10.0.0.5:8000/api/v1';
-};
-
-const API_URL = getBaseUrl();
-
-// Store token
 let authToken = null;
 
-// API helper function
+// Device name für Token
+const getDeviceName = () => {
+    return `${Platform.OS}-${Platform.Version || 'unknown'}`;
+};
+
+// Base API Request
 const apiRequest = async (endpoint, options = {}) => {
     const url = `${API_URL}${endpoint}`;
 
-    // Get token from storage if not in memory
     if (!authToken) {
         authToken = await AsyncStorage.getItem('authToken');
     }
 
-    const defaultHeaders = {
+    const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+        ...options.headers,
     };
 
-    if (authToken) {
-        defaultHeaders['Authorization'] = `Bearer ${authToken}`;
+    // Remove Content-Type for FormData
+    if (options.body instanceof FormData) {
+        delete headers['Content-Type'];
     }
 
-    const config = {
-        ...options,
-        headers: {
-            ...defaultHeaders,
-            ...options.headers,
-        },
-    };
-
     try {
-        const response = await fetch(url, config);
+        const response = await fetch(url, { ...options, headers });
         const data = await response.json();
 
         if (!response.ok) {
             throw {
                 status: response.status,
-                message: data.message || 'Something went wrong',
+                message: data.message || 'Ein Fehler ist aufgetreten',
                 errors: data.errors || {},
+                data: data.data || null
             };
         }
-
         return data;
     } catch (error) {
-        if (error.status) {
-            throw error;
-        }
-        throw {
-            status: 0,
-            message: 'Network error. Please check your connection.',
-            errors: {},
-        };
+        if (error.status) throw error;
+        throw { status: 0, message: 'Netzwerkfehler - Bitte Verbindung prüfen', errors: {} };
     }
 };
 
-// ============ AUTH SERVICES ============
-
+// ============================================
+// AUTH SERVICE
+// ============================================
 export const authService = {
-    // Register new user
-    register: async (name, email, password, password_confirmation) => {
+    /**
+     * Registrierung
+     * Required: name, email, password, password_confirmation, device_name
+     * Optional: account_type (public/private)
+     */
+    register: async (name, email, password, password_confirmation, account_type = 'public') => {
         const response = await apiRequest('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ name, email, password, password_confirmation }),
+            body: JSON.stringify({
+                name,
+                email,
+                password,
+                password_confirmation,
+                device_name: getDeviceName(),
+                account_type
+            }),
         });
-        if (response.token) {
-            authToken = response.token;
-            await AsyncStorage.setItem('authToken', response.token);
+
+        if (response.data?.token) {
+            authToken = response.data.token;
+            await AsyncStorage.setItem('authToken', response.data.token);
         }
         return response;
     },
 
-    // Login
-    login: async (email, password) => {
+    /**
+     * Login
+     * Required: email, password, device_name
+     * Optional: two_factor_code (6 digits)
+     */
+    login: async (email, password, two_factor_code = null) => {
+        const body = {
+            email,
+            password,
+            device_name: getDeviceName(),
+        };
+
+        if (two_factor_code) {
+            body.two_factor_code = two_factor_code;
+        }
+
         const response = await apiRequest('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ email, password }),
+            body: JSON.stringify(body),
         });
-        if (response.token) {
-            authToken = response.token;
-            await AsyncStorage.setItem('authToken', response.token);
+
+        if (response.data?.token) {
+            authToken = response.data.token;
+            await AsyncStorage.setItem('authToken', response.data.token);
         }
         return response;
     },
 
-    // Logout
+    /**
+     * Logout - Aktuellen Token löschen
+     */
     logout: async () => {
         try {
             await apiRequest('/auth/logout', { method: 'POST' });
@@ -111,198 +126,279 @@ export const authService = {
         }
     },
 
-    // Get current user
-    getUser: async () => {
-        return await apiRequest('/auth/user');
+    /**
+     * Logout All - Alle Tokens löschen
+     */
+    logoutAll: async () => {
+        try {
+            await apiRequest('/auth/logout-all', { method: 'POST' });
+        } finally {
+            authToken = null;
+            await AsyncStorage.removeItem('authToken');
+        }
     },
 
-    // Refresh token
+    /**
+     * Aktueller User
+     */
+    getUser: async () => apiRequest('/auth/user'),
+
+    /**
+     * Token erneuern
+     */
     refresh: async () => {
         const response = await apiRequest('/auth/refresh', { method: 'POST' });
-        if (response.token) {
-            authToken = response.token;
-            await AsyncStorage.setItem('authToken', response.token);
+        if (response.data?.token) {
+            authToken = response.data.token;
+            await AsyncStorage.setItem('authToken', response.data.token);
         }
         return response;
     },
 
-    // Forgot password
-    forgotPassword: async (email) => {
-        return await apiRequest('/auth/forgot-password', {
-            method: 'POST',
-            body: JSON.stringify({ email }),
-        });
-    },
+    /**
+     * Passwort vergessen - Reset Link senden
+     */
+    forgotPassword: async (email) => apiRequest('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+    }),
 
-    // Reset password
-    resetPassword: async (token, email, password, password_confirmation) => {
-        return await apiRequest('/auth/reset-password', {
-            method: 'POST',
-            body: JSON.stringify({ token, email, password, password_confirmation }),
-        });
-    },
+    /**
+     * Passwort zurücksetzen
+     */
+    resetPassword: async (token, email, password, password_confirmation) => apiRequest('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token, email, password, password_confirmation }),
+    }),
 
-    // Check if token exists
+    /**
+     * Email Verifizierung erneut senden
+     */
+    resendVerification: async () => apiRequest('/auth/email/resend', { method: 'POST' }),
+
+    /**
+     * Check ob eingeloggt
+     */
     isAuthenticated: async () => {
         const token = await AsyncStorage.getItem('authToken');
         return !!token;
     },
-
-    // Set token (for app initialization)
-    setToken: async (token) => {
-        authToken = token;
-        await AsyncStorage.setItem('authToken', token);
-    },
 };
 
-// ============ USER SERVICES ============
+// ============================================
+// TWO FACTOR SERVICE
+// ============================================
+export const twoFactorService = {
+    /**
+     * 2FA aktivieren
+     * Required: password
+     */
+    enable: async (password) => apiRequest('/auth/two-factor/enable', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+    }),
 
+    /**
+     * QR Code abrufen
+     */
+    getQR: async () => apiRequest('/auth/two-factor/qr'),
+
+    /**
+     * 2FA bestätigen
+     * Required: code (6 digits)
+     */
+    confirm: async (code) => apiRequest('/auth/two-factor/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+    }),
+
+    /**
+     * 2FA deaktivieren
+     * Required: password
+     */
+    disable: async (password) => apiRequest('/auth/two-factor/disable', {
+        method: 'POST',
+        body: JSON.stringify({ password }),
+    }),
+};
+
+// ============================================
+// USER SERVICE
+// ============================================
 export const userService = {
-    // Get own profile
-    getProfile: async () => {
-        return await apiRequest('/user/profile');
-    },
+    /**
+     * Eigenes Profil anzeigen
+     */
+    getProfile: async () => apiRequest('/user'),
 
-    // Update profile
-    updateProfile: async (data) => {
-        return await apiRequest('/user/profile', {
+    /**
+     * Profil aktualisieren
+     * Optional: name, email, account_type (public/private)
+     */
+    updateProfile: async (data) => apiRequest('/user', {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    }),
+
+    /**
+     * Passwort ändern
+     * Required: current_password, password, password_confirmation
+     * Optional: revoke_other_tokens (boolean)
+     */
+    updatePassword: async (current_password, password, password_confirmation, revoke_other_tokens = false) =>
+        apiRequest('/user/password', {
             method: 'PATCH',
-            body: JSON.stringify(data),
-        });
-    },
+            body: JSON.stringify({ current_password, password, password_confirmation, revoke_other_tokens }),
+        }),
 
-    // Update password
-    updatePassword: async (current_password, password, password_confirmation) => {
-        return await apiRequest('/user/password', {
-            method: 'PATCH',
-            body: JSON.stringify({ current_password, password, password_confirmation }),
+    /**
+     * Account löschen
+     * Required: password
+     */
+    deleteAccount: async (password) => {
+        const response = await apiRequest('/user', {
+            method: 'DELETE',
+            body: JSON.stringify({ password }),
         });
-    },
-
-    // Delete account
-    deleteAccount: async () => {
-        const response = await apiRequest('/user/account', { method: 'DELETE' });
         authToken = null;
         await AsyncStorage.removeItem('authToken');
         return response;
     },
 
-    // Get other user's profile
-    getUser: async (userId) => {
-        return await apiRequest(`/users/${userId}`);
-    },
+    /**
+     * Anderen User anzeigen (mit Follower Stats)
+     */
+    getUser: async (userId) => apiRequest(`/users/${userId}`),
 
-    // Search users
-    searchUsers: async (query) => {
-        return await apiRequest(`/search/users?q=${encodeURIComponent(query)}`);
-    },
+    /**
+     * User suchen
+     * Required: search (min 2, max 50 chars)
+     */
+    searchUsers: async (query) => apiRequest(`/search/users?search=${encodeURIComponent(query)}`),
 };
 
-// ============ FOLLOW SERVICES ============
-
+// ============================================
+// FOLLOW SERVICE
+// ============================================
 export const followService = {
-    // Follow a user
-    follow: async (userId) => {
-        return await apiRequest(`/users/${userId}/follow`, { method: 'POST' });
-    },
+    /**
+     * User folgen (oder Anfrage senden bei privaten Accounts)
+     */
+    follow: async (userId) => apiRequest(`/users/${userId}/follow`, { method: 'POST' }),
 
-    // Unfollow a user
-    unfollow: async (userId) => {
-        return await apiRequest(`/users/${userId}/follow`, { method: 'DELETE' });
-    },
+    /**
+     * Entfolgen oder Anfrage zurückziehen
+     */
+    unfollow: async (userId) => apiRequest(`/users/${userId}/follow`, { method: 'DELETE' }),
 
-    // Get followers
-    getFollowers: async (userId) => {
-        return await apiRequest(`/users/${userId}/followers`);
-    },
+    /**
+     * Followers eines Users abrufen
+     */
+    getFollowers: async (userId, page = 1) => apiRequest(`/users/${userId}/followers?page=${page}`),
 
-    // Get following
-    getFollowing: async (userId) => {
-        return await apiRequest(`/users/${userId}/following`);
-    },
+    /**
+     * Following eines Users abrufen
+     */
+    getFollowing: async (userId, page = 1) => apiRequest(`/users/${userId}/following?page=${page}`),
 
-    // Remove follower
-    removeFollower: async (userId) => {
-        return await apiRequest(`/users/${userId}/follower`, { method: 'DELETE' });
-    },
+    /**
+     * Follower entfernen (von eigenem Profil)
+     */
+    removeFollower: async (userId) => apiRequest(`/users/${userId}/remove-follower`, { method: 'DELETE' }),
 
-    // Get follow requests (for private accounts)
-    getRequests: async () => {
-        return await apiRequest('/follow-requests');
-    },
+    /**
+     * Eingehende Follow-Anfragen (für private Accounts)
+     */
+    getRequests: async (page = 1) => apiRequest(`/follow-requests?page=${page}`),
 
-    // Accept follow request
-    acceptRequest: async (requestId) => {
-        return await apiRequest(`/follow-requests/${requestId}/accept`, { method: 'POST' });
-    },
+    /**
+     * Follow-Anfrage annehmen
+     */
+    acceptRequest: async (requestId) => apiRequest(`/follow-requests/${requestId}/accept`, { method: 'POST' }),
 
-    // Decline follow request
-    declineRequest: async (requestId) => {
-        return await apiRequest(`/follow-requests/${requestId}/decline`, { method: 'POST' });
-    },
+    /**
+     * Follow-Anfrage ablehnen
+     */
+    declineRequest: async (requestId) => apiRequest(`/follow-requests/${requestId}/decline`, { method: 'POST' }),
 };
 
-// ============ BLOCK SERVICES ============
-
+// ============================================
+// BLOCK SERVICE
+// ============================================
 export const blockService = {
-    // Get blocked users
-    getBlocked: async () => {
-        return await apiRequest('/blocks');
-    },
+    /**
+     * Liste blockierter User
+     */
+    getBlocked: async (page = 1) => apiRequest(`/blocks?page=${page}`),
 
-    // Block a user
-    block: async (userId) => {
-        return await apiRequest(`/users/${userId}/block`, { method: 'POST' });
-    },
+    /**
+     * User blockieren
+     */
+    block: async (userId) => apiRequest(`/users/${userId}/block`, { method: 'POST' }),
 
-    // Unblock a user
-    unblock: async (userId) => {
-        return await apiRequest(`/users/${userId}/block`, { method: 'DELETE' });
-    },
+    /**
+     * User entblockieren
+     */
+    unblock: async (userId) => apiRequest(`/users/${userId}/block`, { method: 'DELETE' }),
 };
 
-// ============ POST SERVICES ============
-
+// ============================================
+// POST SERVICE
+// ============================================
 export const postService = {
-    // Get all posts (discover)
-    getPosts: async (page = 1) => {
-        return await apiRequest(`/posts?page=${page}`);
-    },
+    /**
+     * Alle Posts (paginiert)
+     */
+    getPosts: async (page = 1) => apiRequest(`/posts?page=${page}`),
 
-    // Get "For You" feed
-    getForYou: async (page = 1) => {
-        return await apiRequest(`/posts/for-you?page=${page}`);
-    },
+    /**
+     * For You Feed - Personalisiert
+     * Optional: limit (1-20), offset
+     */
+    getForYou: async (limit = 5, offset = 0) =>
+        apiRequest(`/posts/for-you?limit=${limit}&offset=${offset}`),
 
-    // Get following feed
-    getFollowing: async (page = 1) => {
-        return await apiRequest(`/posts/following?page=${page}`);
-    },
+    /**
+     * Following Feed - Posts von gefolgten Usern
+     */
+    getFollowing: async (page = 1) => apiRequest(`/posts/following?page=${page}`),
 
-    // Get friends feed
-    getFriends: async (page = 1) => {
-        return await apiRequest(`/posts/friends?page=${page}`);
-    },
+    /**
+     * Friends Feed - Posts von gegenseitigen Follows
+     */
+    getFriends: async (page = 1) => apiRequest(`/posts/friends?page=${page}`),
 
-    // Get user's posts
-    getUserPosts: async (userId, page = 1) => {
-        return await apiRequest(`/posts/user/${userId}?page=${page}`);
-    },
+    /**
+     * Posts eines Users
+     */
+    getUserPosts: async (userId, page = 1) => apiRequest(`/posts/user/${userId}?page=${page}`),
 
-    // Get single post
-    getPost: async (postId) => {
-        return await apiRequest(`/posts/${postId}`);
-    },
+    /**
+     * Einzelnen Post anzeigen
+     */
+    getPost: async (postId) => apiRequest(`/posts/${postId}`),
 
-    // Create post
-    create: async (formData) => {
+    /**
+     * Neuen Post erstellen
+     * Required: description (max 1000)
+     * Optional: image_url
+     */
+    create: async (description, image_url = null) => apiRequest('/posts', {
+        method: 'POST',
+        body: JSON.stringify({ description, image_url }),
+    }),
+
+    /**
+     * Post mit Bild erstellen (FormData)
+     * Wenn dein Backend File Upload unterstützt
+     */
+    createWithImage: async (formData) => {
         const token = await AsyncStorage.getItem('authToken');
         const response = await fetch(`${API_URL}/posts`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
-                // Don't set Content-Type for FormData
             },
             body: formData,
         });
@@ -313,89 +409,159 @@ export const postService = {
         return data;
     },
 
-    // Update post
-    update: async (postId, data) => {
-        return await apiRequest(`/posts/${postId}`, {
-            method: 'PATCH',
-            body: JSON.stringify(data),
-        });
-    },
+    /**
+     * Post aktualisieren
+     * Optional: description, image_url
+     */
+    update: async (postId, data) => apiRequest(`/posts/${postId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    }),
 
-    // Delete post
-    delete: async (postId) => {
-        return await apiRequest(`/posts/${postId}`, { method: 'DELETE' });
-    },
+    /**
+     * Post löschen
+     */
+    delete: async (postId) => apiRequest(`/posts/${postId}`, { method: 'DELETE' }),
 
-    // Like post
-    like: async (postId) => {
-        return await apiRequest(`/posts/${postId}/like`, { method: 'POST' });
-    },
+    /**
+     * Like/Dislike setzen
+     * Required: is_like (true = like, false = dislike)
+     */
+    react: async (postId, is_like = true) => apiRequest(`/posts/${postId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ is_like }),
+    }),
 
-    // Unlike post
-    unlike: async (postId) => {
-        return await apiRequest(`/posts/${postId}/like`, { method: 'DELETE' });
-    },
+    /**
+     * Like (Shortcut)
+     */
+    like: async (postId) => apiRequest(`/posts/${postId}/like`, {
+        method: 'POST',
+        body: JSON.stringify({ is_like: true }),
+    }),
+
+    /**
+     * Reaction entfernen
+     */
+    unlike: async (postId) => apiRequest(`/posts/${postId}/like`, { method: 'DELETE' }),
 };
 
-// ============ COMMENT SERVICES ============
-
+// ============================================
+// COMMENT SERVICE
+// ============================================
 export const commentService = {
-    // Get comments for a post
-    getComments: async (postId, page = 1) => {
-        return await apiRequest(`/posts/${postId}/comments?page=${page}`);
-    },
+    /**
+     * Comments eines Posts abrufen (mit Replies)
+     */
+    getComments: async (postId, page = 1) => apiRequest(`/posts/${postId}/comments?page=${page}`),
 
-    // Create comment
-    create: async (postId, body, parentId = null) => {
-        const payload = { body };
-        if (parentId) {
-            payload.parent_id = parentId;
-        }
-        return await apiRequest(`/posts/${postId}/comments`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
-    },
+    /**
+     * Comment erstellen
+     * Required: body (max 500)
+     * Optional: parent_id (für Replies)
+     */
+    create: async (postId, body, parent_id = null) => apiRequest(`/posts/${postId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body, ...(parent_id && { parent_id }) }),
+    }),
 
-    // Delete comment
-    delete: async (commentId) => {
-        return await apiRequest(`/comments/${commentId}`, { method: 'DELETE' });
-    },
+    /**
+     * Comment löschen
+     */
+    delete: async (commentId) => apiRequest(`/comments/${commentId}`, { method: 'DELETE' }),
 };
 
-// ============ REPORT SERVICES ============
-
+// ============================================
+// REPORT SERVICE
+// ============================================
 export const reportService = {
-    // Get report categories
-    getCategories: async () => {
-        return await apiRequest('/reports/categories');
-    },
+    /**
+     * Report-Kategorien abrufen
+     */
+    getCategories: async () => apiRequest('/reports/categories'),
 
-    // Report a user
-    reportUser: async (userId, category, description = '') => {
-        return await apiRequest(`/users/${userId}/report`, {
+    /**
+     * User/Content melden
+     * Required: category (slug), content_type (post/comment/message/profile), content_id
+     * Optional: reason (max 500)
+     */
+    report: async (userId, category, content_type, content_id, reason = null) =>
+        apiRequest(`/users/${userId}/report`, {
             method: 'POST',
-            body: JSON.stringify({ category, description }),
-        });
-    },
+            body: JSON.stringify({ category, content_type, content_id, reason }),
+        }),
 
-    // Get my moderation status
-    getMyStatus: async () => {
-        return await apiRequest('/user/moderation-status');
-    },
+    /**
+     * Eigene Warnings abrufen
+     */
+    getMyWarnings: async () => apiRequest('/user/warnings'),
 
-    // Get my warnings
-    getMyWarnings: async () => {
-        return await apiRequest('/user/warnings');
-    },
+    /**
+     * Eigenen Moderations-Status abrufen
+     */
+    getMyStatus: async () => apiRequest('/user/moderation-status'),
 };
 
+// ============================================
+// ADMIN/MODERATION SERVICE (falls Admin)
+// ============================================
+export const moderationService = {
+    /**
+     * Alle offenen Reports
+     */
+    getReports: async (status = 'pending', page = 1) =>
+        apiRequest(`/admin/moderation/reports?status=${status}&page=${page}`),
+
+    /**
+     * Report anzeigen
+     */
+    getReport: async (reportId) => apiRequest(`/admin/moderation/reports/${reportId}`),
+
+    /**
+     * Report als gelöst markieren
+     */
+    resolveReport: async (reportId, admin_note = null) =>
+        apiRequest(`/admin/moderation/reports/${reportId}/resolve`, {
+            method: 'POST',
+            body: JSON.stringify({ admin_note }),
+        }),
+
+    /**
+     * Report ablehnen
+     */
+    dismissReport: async (reportId) =>
+        apiRequest(`/admin/moderation/reports/${reportId}/dismiss`, { method: 'POST' }),
+
+    /**
+     * User bannen
+     * Required: reason
+     * Optional: hours (für temporären Ban)
+     */
+    banUser: async (userId, reason, hours = null) =>
+        apiRequest(`/admin/moderation/users/${userId}/ban`, {
+            method: 'POST',
+            body: JSON.stringify({ reason, hours }),
+        }),
+
+    /**
+     * User entbannen
+     */
+    unbanUser: async (userId, reason = null) =>
+        apiRequest(`/admin/moderation/users/${userId}/unban`, {
+            method: 'POST',
+            body: JSON.stringify({ reason }),
+        }),
+};
+
+// Default Export
 export default {
     auth: authService,
+    twoFactor: twoFactorService,
     user: userService,
     follow: followService,
     block: blockService,
     post: postService,
     comment: commentService,
     report: reportService,
+    moderation: moderationService,
 };
