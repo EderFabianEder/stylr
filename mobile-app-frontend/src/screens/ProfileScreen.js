@@ -1,434 +1,251 @@
-import React, { useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    Image,
-    TouchableOpacity,
-    FlatList,
-    Dimensions,
-    StatusBar,
-    ScrollView
-} from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Image, FlatList, StatusBar, Modal, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus } from 'lucide-react-native';
-import EditProfileScreen from './EditProfileScreen';
+import { Settings, Plus, Grid, Lock } from 'lucide-react-native';
+import { postService, userService } from '../services/api';
 import AddPhotoScreen from './AddPhotoScreen';
 import PictureStatsScreen from './PictureStatsScreen';
-import OtherProfileScreen from './OtherProfileScreen';
+import EditProfileScreen from './EditProfileScreen';
 
-const { width, height } = Dimensions.get('window');
+export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUser }) {
+    const [posts, setPosts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showAddPhoto, setShowAddPhoto] = useState(false);
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [selectedPost, setSelectedPost] = useState(null);
+    const [profile, setProfile] = useState(null);
 
-// Mock data for "My Pictures"
-const initialPictures = [
-    { id: '1', image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400', description: 'Summer vibes ☀️' },
-    { id: '2', image: 'https://images.unsplash.com/photo-1539109132314-3477524c859c?w=400', description: 'New outfit of the day!' },
-    { id: '3', image: 'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=400', description: 'Feeling elegant ✨' },
-    { id: '4', image: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=400', description: 'Concert night 🎵' },
-];
+    useEffect(() => { loadUserData(); }, [user?.id]);
 
-export default function ProfileScreen({ user, onUpdateUser }) {
-    const [showEditScreen, setShowEditScreen] = useState(false);
-    const [showAddPhotoScreen, setShowAddPhotoScreen] = useState(false);
-    const [showPictureStats, setShowPictureStats] = useState(false);
-    const [selectedPicture, setSelectedPicture] = useState(null);
-    const [userData, setUserData] = useState(user);
-    const [myPictures, setMyPictures] = useState(initialPictures);
-    const [showOtherProfile, setShowOtherProfile] = useState(false);
-    const [selectedUser, setSelectedUser] = useState(null);
+    const loadUserData = async (refresh = false) => {
+        try {
+            if (refresh) setIsRefreshing(true);
 
-    const handleSaveProfile = (updatedData) => {
-        setUserData(updatedData);
-        setShowEditScreen(false);
-        // Persist the update to parent
-        if (onUpdateUser) {
-            onUpdateUser(updatedData);
+            const [postsRes, profileRes] = await Promise.all([
+                postService.getUserPosts(user?.id),
+                userService.getProfile()
+            ]);
+
+            // GET /posts/user/{userId} returns: { success, data: { current_page, data: [...], per_page, total } }
+            const postsData = postsRes.data?.data || postsRes.data || [];
+            const profileData = profileRes.data?.user || profileRes.data || profileRes;
+
+            setPosts(postsData);
+            setProfile(profileData);
+        } catch (error) {
+            console.log('Failed to load profile:', error);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
         }
     };
 
-    const handleAddPhoto = (photoData) => {
-        // Add the new photo to the beginning of the list
-        const newPhoto = {
-            id: photoData.id,
-            image: photoData.image,
-            description: photoData.description,
-        };
-        setMyPictures(prevPictures => [newPhoto, ...prevPictures]);
+    const onRefresh = useCallback(() => {
+        loadUserData(true);
+    }, []);
+
+    const handleAddPhoto = async (photoData) => {
+        try {
+            // POST /posts { description, image_url }
+            await postService.create(photoData.description, photoData.imageUri || null);
+            loadUserData(true);
+            setShowAddPhoto(false);
+            Alert.alert('Erfolg', 'Post wurde erstellt!');
+        } catch (error) {
+            Alert.alert('Fehler', error.message || 'Post konnte nicht erstellt werden');
+        }
     };
 
-    const handlePicturePress = (picture) => {
-        setSelectedPicture(picture);
-        setShowPictureStats(true);
+    const handleDeletePost = async (postId) => {
+        Alert.alert('Post löschen', 'Bist du sicher?', [
+            { text: 'Abbrechen', style: 'cancel' },
+            {
+                text: 'Löschen',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        // DELETE /posts/{id}
+                        await postService.delete(postId);
+                        setPosts(prev => prev.filter(p => p.id !== postId));
+                        setSelectedPost(null);
+                        Alert.alert('Erfolg', 'Post wurde gelöscht');
+                    } catch (error) {
+                        Alert.alert('Fehler', error.message || 'Post konnte nicht gelöscht werden');
+                    }
+                }
+            }
+        ]);
     };
 
-    const handleDeletePicture = (pictureId) => {
-        setMyPictures(prevPictures => prevPictures.filter(p => p.id !== pictureId));
+    const handleUpdateProfile = async (data) => {
+        try {
+            await userService.updateProfile(data);
+            if (onUpdateUser) onUpdateUser(data);
+            if (refreshUser) refreshUser();
+            loadUserData(true);
+            setShowEditProfile(false);
+            Alert.alert('Erfolg', 'Profil wurde aktualisiert');
+        } catch (error) {
+            Alert.alert('Fehler', error.message || 'Profil konnte nicht aktualisiert werden');
+            throw error;
+        }
     };
 
-    const handleUserPressFromComments = (userFromComment) => {
-        setSelectedUser(userFromComment);
-        setShowPictureStats(false);
-        setShowOtherProfile(true);
-    };
-
-    // Show Edit Profile Screen
-    if (showEditScreen) {
-        return (
-            <EditProfileScreen
-                user={userData}
-                onSave={handleSaveProfile}
-                onBack={() => setShowEditScreen(false)}
-            />
-        );
-    }
-
-    // Show Add Photo Screen
-    if (showAddPhotoScreen) {
-        return (
-            <AddPhotoScreen
-                onBack={() => setShowAddPhotoScreen(false)}
-                onSubmit={handleAddPhoto}
-            />
-        );
-    }
-
-    // Show Other User Profile (from comments)
-    if (showOtherProfile && selectedUser) {
-        return (
-            <OtherProfileScreen
-                user={selectedUser}
-                onBack={() => {
-                    setShowOtherProfile(false);
-                    setSelectedUser(null);
-                }}
-                initialFollowing={false}
-                currentUser={userData}
-            />
-        );
-    }
-
-    // Show Picture Stats Screen
-    if (showPictureStats && selectedPicture) {
-        return (
-            <PictureStatsScreen
-                picture={selectedPicture}
-                onClose={() => {
-                    setShowPictureStats(false);
-                    setSelectedPicture(null);
-                }}
-                onDelete={handleDeletePicture}
-                currentUser={userData}
-                isOwnPicture={true}
-                onUserPress={handleUserPressFromComments}
-            />
-        );
-    }
-
-    const renderPicture = ({ item }) => (
-        <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handlePicturePress(item)}
-        >
-            <View style={styles.pictureSquare}>
-                <Image source={{ uri: item.image }} style={styles.squareImage} />
-                <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.3)']}
-                    style={styles.pictureOverlay}
-                />
+    const renderPost = ({ item }) => (
+        <TouchableOpacity style={styles.gridItem} onPress={() => setSelectedPost(item)}>
+            {item.image_url ? (
+                <Image source={{ uri: item.image_url }} style={styles.gridImage} />
+            ) : (
+                <View style={[styles.gridImage, styles.noImagePlaceholder]}>
+                    <Text style={styles.noImageText}>📝</Text>
+                </View>
+            )}
+            <View style={styles.gridOverlay}>
+                <Text style={styles.gridStats}>❤️ {item.likes_count || 0}</Text>
             </View>
         </TouchableOpacity>
     );
 
+    if (selectedPost) {
+        return (
+            <PictureStatsScreen
+                picture={selectedPost}
+                isOwnPicture={true}
+                onBack={() => setSelectedPost(null)}
+                onDelete={() => handleDeletePost(selectedPost.id)}
+                currentUser={user}
+            />
+        );
+    }
+
+    const displayUser = profile || user;
+    const isPrivate = displayUser?.account_type === 'private';
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
-
-            <ScrollView
-                style={styles.scrollView}
-                showsVerticalScrollIndicator={false}
-                bounces={true}
-            >
-                {/* Top Profile Picture with Gradient Background */}
-                <View style={styles.headerSection}>
-                    <View style={styles.largeProfilePlaceholder}>
-                        {userData?.profilePhoto ? (
-                            <Image source={{ uri: userData.profilePhoto }} style={styles.profileImage} />
-                        ) : (
-                            <Text style={styles.placeholderLogo}>bʈb</Text>
-                        )}
-                    </View>
+            <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Profil</Text>
+                    <TouchableOpacity onPress={() => setShowEditProfile(true)} style={styles.settingsButton}>
+                        <Settings size={24} color="#fff" />
+                    </TouchableOpacity>
                 </View>
 
-                {/* Info Card Container with Shadow */}
-                <View style={styles.infoCard}>
-                    <View style={styles.cardHeader}>
-                        <View>
-                            <Text style={styles.userNameText}>{userData?.username || 'UserName'}</Text>
-                            <Text style={styles.userHandle}>@{userData?.username?.toLowerCase() || 'username'}</Text>
-                        </View>
+                <View style={styles.profileSection}>
+                    <LinearGradient colors={['#fff', '#f0f0f0']} style={styles.avatarContainer}>
+                        <Text style={styles.avatarText}>{displayUser?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+                    </LinearGradient>
+
+                    <View style={styles.nameRow}>
+                        <Text style={styles.username}>{displayUser?.name || 'User'}</Text>
+                        {isPrivate && <Lock size={16} color="rgba(255,255,255,0.8)" style={{ marginLeft: 8 }} />}
                     </View>
 
-                    {/* Stats Row with Enhanced Design */}
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{myPictures.length.toLocaleString()}</Text>
-                            <Text style={styles.statLabel}>Pictures</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>2,000</Text>
-                            <Text style={styles.statLabel}>Followers</Text>
-                        </View>
-                        <View style={styles.statDivider} />
-                        <View style={styles.statItem}>
-                            <Text style={styles.statValue}>300</Text>
-                            <Text style={styles.statLabel}>Following</Text>
-                        </View>
-                    </View>
+                    <Text style={styles.email}>{displayUser?.email}</Text>
+                    {isPrivate && <Text style={styles.privateLabel}>Privates Profil</Text>}
 
-                    {/* Bio Description with Better Typography */}
-                    <View style={styles.bioContainer}>
-                        <Text style={styles.bioText}>
-                            {userData?.description || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ✨'}
-                        </Text>
-                    </View>
-
-                    {/* My Pictures Section Header */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>My Gallery</Text>
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => setShowAddPhotoScreen(true)}
-                        >
-                            <LinearGradient
-                                colors={['#FF5A5F', '#CE494D']}
-                                style={styles.plusButton}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                            >
-                                <Plus size={20} color="white" strokeWidth={3} />
-                            </LinearGradient>
+                    <View style={styles.statsContainer}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>{posts.length}</Text>
+                            <Text style={styles.statLabel}>Posts</Text>
+                        </View>
+                        <TouchableOpacity style={styles.statItem}>
+                            <Text style={styles.statNumber}>{displayUser?.followers_count || 0}</Text>
+                            <Text style={styles.statLabel}>Follower</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.statItem}>
+                            <Text style={styles.statNumber}>{displayUser?.following_count || 0}</Text>
+                            <Text style={styles.statLabel}>Folge ich</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {/* Horizontal Carousel for Pictures */}
-                    <View style={styles.carouselWrapper}>
-                        <FlatList
-                            data={myPictures}
-                            renderItem={renderPicture}
-                            keyExtractor={item => item.id}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.horizontalList}
-                        />
-                    </View>
-
-                    {/* Edit Profile Button - Enhanced Gradient */}
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => setShowEditScreen(true)}
-                    >
-                        <LinearGradient
-                            colors={['#FF5A5F', '#CE494D']}
-                            style={styles.editProfileButton}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                        >
-                            <Text style={styles.editProfileText}>Edit Profile</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-
-                    {/* Extra padding at bottom for scroll */}
-                    <View style={styles.bottomPadding} />
                 </View>
-            </ScrollView>
+            </LinearGradient>
+
+            <View style={styles.content}>
+                <View style={styles.tabBar}>
+                    <TouchableOpacity style={styles.tabActive}>
+                        <Grid size={22} color="#FF5A5F" />
+                    </TouchableOpacity>
+                </View>
+
+                {isLoading ? (
+                    <ActivityIndicator size="large" color="#FF5A5F" style={{ marginTop: 40 }} />
+                ) : posts.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>Noch keine Posts</Text>
+                        <TouchableOpacity onPress={() => setShowAddPhoto(true)} style={styles.addButton}>
+                            <Text style={styles.addButtonText}>Ersten Post erstellen</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <FlatList
+                        data={posts}
+                        renderItem={renderPost}
+                        keyExtractor={(item) => item.id.toString()}
+                        numColumns={3}
+                        contentContainerStyle={styles.gridContainer}
+                        refreshControl={
+                            <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={['#FF5A5F']} />
+                        }
+                    />
+                )}
+            </View>
+
+            <TouchableOpacity style={styles.fab} onPress={() => setShowAddPhoto(true)}>
+                <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.fabGradient}>
+                    <Plus size={28} color="#fff" />
+                </LinearGradient>
+            </TouchableOpacity>
+
+            <Modal visible={showAddPhoto} animationType="slide" onRequestClose={() => setShowAddPhoto(false)}>
+                <AddPhotoScreen onClose={() => setShowAddPhoto(false)} onSubmit={handleAddPhoto} />
+            </Modal>
+
+            <Modal visible={showEditProfile} animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
+                <EditProfileScreen
+                    user={displayUser}
+                    onClose={() => setShowEditProfile(false)}
+                    onSave={handleUpdateProfile}
+                    onLogout={onLogout}
+                />
+            </Modal>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FF5A5F',
-    },
-    scrollView: {
-        flex: 1,
-    },
-    headerSection: {
-        height: height * 0.35,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingTop: 20,
-        backgroundColor: '#FF5A5F',
-    },
-    largeProfilePlaceholder: {
-        width: width * 0.4,
-        height: width * 0.4,
-        backgroundColor: '#FFFFFF',
-        borderRadius: width * 0.2,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 12,
-        elevation: 10,
-        overflow: 'hidden',
-    },
-    profileImage: {
-        width: '100%',
-        height: '100%',
-    },
-    placeholderLogo: {
-        fontSize: 52,
-        fontWeight: 'bold',
-        color: '#FF5A5F',
-    },
-    infoCard: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 35,
-        borderTopRightRadius: 35,
-        paddingTop: 25,
-        paddingHorizontal: 25,
-        paddingBottom: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 10,
-        minHeight: height * 0.7,
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 20,
-    },
-    userNameText: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#000',
-        marginBottom: 2,
-    },
-    userHandle: {
-        fontSize: 15,
-        color: '#999',
-        fontWeight: '500',
-    },
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        borderRadius: 20,
-        paddingVertical: 20,
-        paddingHorizontal: 15,
-        marginBottom: 20,
-    },
-    statItem: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    statDivider: {
-        width: 1,
-        height: 40,
-        backgroundColor: '#E0E0E0',
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#888',
-        fontWeight: '600',
-        marginTop: 4,
-    },
-    statValue: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#FF5A5F',
-    },
-    bioContainer: {
-        backgroundColor: '#F8F9FA',
-        borderRadius: 16,
-        padding: 15,
-        marginBottom: 25,
-    },
-    bioText: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 20,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    sectionTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#000',
-        marginRight: 12,
-    },
-    plusButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#FF5A5F',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 6,
-        elevation: 6,
-    },
-    carouselWrapper: {
-        marginBottom: 20,
-    },
-    horizontalList: {
-        paddingVertical: 5,
-    },
-    pictureSquare: {
-        width: 100,
-        height: 100,
-        backgroundColor: '#E0E0E0',
-        borderRadius: 20,
-        marginHorizontal: 6,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    squareImage: {
-        width: '100%',
-        height: '100%',
-    },
-    pictureOverlay: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '30%',
-    },
-    editProfileButton: {
-        paddingVertical: 16,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 10,
-        shadowColor: '#FF5A5F',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
-    },
-    editProfileText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#FFF',
-        letterSpacing: 0.5,
-    },
-    bottomPadding: {
-        height: 20,
-    },
+    container: { flex: 1, backgroundColor: '#f5f5f5' },
+    headerGradient: { paddingTop: 50, paddingBottom: 30, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20 },
+    headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
+    settingsButton: { padding: 8 },
+    profileSection: { alignItems: 'center', paddingTop: 20 },
+    avatarContainer: { width: 90, height: 90, borderRadius: 45, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { fontSize: 36, fontWeight: 'bold', color: '#FF5A5F' },
+    nameRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+    username: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
+    email: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+    privateLabel: { fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
+    statsContainer: { flexDirection: 'row', marginTop: 20 },
+    statItem: { alignItems: 'center', marginHorizontal: 25 },
+    statNumber: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+    statLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+    content: { flex: 1 },
+    tabBar: { flexDirection: 'row', justifyContent: 'center', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#e0e0e0', backgroundColor: '#fff' },
+    tabActive: { padding: 8 },
+    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+    emptyText: { fontSize: 18, color: '#666', marginBottom: 20 },
+    addButton: { backgroundColor: '#FF5A5F', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 25 },
+    addButtonText: { color: '#fff', fontWeight: '600' },
+    gridContainer: { padding: 2 },
+    gridItem: { flex: 1/3, aspectRatio: 1, padding: 2 },
+    gridImage: { flex: 1, borderRadius: 4, backgroundColor: '#e0e0e0' },
+    noImagePlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' },
+    noImageText: { fontSize: 24 },
+    gridOverlay: { position: 'absolute', bottom: 4, left: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 4, padding: 4, alignItems: 'center' },
+    gridStats: { color: '#fff', fontSize: 11 },
+    fab: { position: 'absolute', bottom: 20, right: 20 },
+    fabGradient: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
 });
