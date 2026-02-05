@@ -1,0 +1,1996 @@
+﻿
+
+========== AuthController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class AuthController extends Controller
+{
+    public function user(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $token = $user?->currentAccessToken();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                ],
+                'current_token' => $token ? [
+                    'name' => $token->name,
+                    'last_used_at' => $token->last_used_at,
+                    'expires_at' => $token->expires_at,
+                ] : null,
+            ],
+        ]);
+    }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $token = $request->user()?->currentAccessToken();
+
+        if (!$token) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kein aktiver Token gefunden.',
+            ], 401);
+        }
+
+        $token->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Erfolgreich abgemeldet',
+        ]);
+    }
+
+    public function logoutAll(Request $request): JsonResponse
+    {
+        $request->user()->tokens()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Von allen GerÃ¤ten abgemeldet',
+        ]);
+    }
+
+    public function refresh(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $current = $user->currentAccessToken();
+
+        if (!$current) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kein aktiver Token gefunden.',
+            ], 401);
+        }
+
+        $deviceName = $current->name;
+        $abilities = $user->tokenAbilities();
+
+        $current->delete();
+
+        $expiresAt = now()->addDays(30);
+
+        $newToken = $user->createToken($deviceName, $abilities, $expiresAt)->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Token erfolgreich erneuert',
+            'data' => [
+                'token' => $newToken,
+                'token_type' => 'Bearer',
+                'expires_at' => $expiresAt->toDateTimeString(),
+            ],
+        ]);
+    }
+}
+
+
+========== EmailVerificationController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Auth\Events\Verified;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class EmailVerificationController extends Controller
+{
+    public function send(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Deine E-Mail-Adresse ist bereits verifiziert.',
+            ], 400);
+        }
+
+        $user->sendEmailVerificationNotification();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Verifizierungs-E-Mail wurde gesendet.',
+        ]);
+    }
+
+    public function verify(Request $request, int $id, string $hash): JsonResponse
+    {
+        $user = User::findOrFail($id);
+
+        $valid = hash_equals(sha1($user->getEmailForVerification()), $hash);
+
+        if (!$valid) {
+            return response()->json([
+                'success' => false,
+                'message' => 'UngÃ¼ltiger Verifizierungs-Link.',
+            ], 403);
+        }
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'E-Mail-Adresse ist bereits verifiziert.',
+            ]);
+        }
+
+        $user->markEmailAsVerified();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'E-Mail-Adresse erfolgreich verifiziert.',
+        ]);
+    }
+}
+
+
+========== LoginController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Fortify\TwoFactorAuthenticationProvider;
+
+class LoginController extends Controller
+{
+    private const MAX_LOGIN_ATTEMPTS = 5;
+    private const LOCKOUT_MINUTES = 15;
+    private const MAX_2FA_ATTEMPTS = 5;
+    private const TWO_FACTOR_LOCKOUT_MINUTES = 10;
+    private const TWO_FACTOR_CODE_DIGITS = 6;
+
+    public function login(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+            'device_name' => ['required', 'string', 'max:255'],
+            'two_factor_code' => ['nullable', 'digits:' . self::TWO_FACTOR_CODE_DIGITS],
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (! $user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Die Anmeldedaten sind ungÃ¼ltig.',
+            ], 422);
+        }
+
+        if ($user->locked_until && $user->locked_until->isFuture()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Account temporÃ¤r gesperrt. Bitte spÃ¤ter erneut versuchen.',
+                'data' => ['locked_until' => $user->locked_until->toDateTimeString()],
+            ], 423);
+        }
+
+        if ($user->locked_until && $user->locked_until->isPast()) {
+            $user->update(['failed_login_attempts' => 0, 'locked_until' => null]);
+        }
+
+        if (! Hash::check($request->password, $user->password)) {
+            $tries = $user->failed_login_attempts + 1;
+            $lockedUntil = $tries >= self::MAX_LOGIN_ATTEMPTS ? now()->addMinutes(self::LOCKOUT_MINUTES) : null;
+
+            $user->update([
+                'failed_login_attempts' => $tries,
+                'locked_until' => $lockedUntil,
+            ]);
+
+            if ($lockedUntil) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Account temporÃ¤r gesperrt. Bitte spÃ¤ter erneut versuchen.',
+                    'data' => ['locked_until' => $lockedUntil->toDateTimeString()],
+                ], 423);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Die Anmeldedaten sind ungÃ¼ltig.',
+                'data' => ['remaining_attempts' => self::MAX_LOGIN_ATTEMPTS - $tries],
+            ], 422);
+        }
+
+        if ($user->two_factor_confirmed_at) {
+            if ($user->two_factor_locked_until && $user->two_factor_locked_until->isFuture()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '2FA temporÃ¤r gesperrt. Bitte spÃ¤ter erneut versuchen.',
+                    'data' => [
+                        'locked_until' => $user->two_factor_locked_until->toDateTimeString(),
+                        'two_factor_locked' => true,
+                    ],
+                ], 423);
+            }
+
+            if ($user->two_factor_locked_until && $user->two_factor_locked_until->isPast()) {
+                $user->update(['failed_two_factor_attempts' => 0, 'two_factor_locked_until' => null]);
+            }
+
+            if (! $request->filled('two_factor_code')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '2FA erforderlich.',
+                    'data' => ['two_factor_required' => true],
+                ], 403);
+            }
+
+            if (! $user->two_factor_secret) {
+                return response()->json([
+                    'success' => false,
+                    'message' => '2FA ist nicht korrekt konfiguriert.',
+                ], 422);
+            }
+
+            $provider = app(TwoFactorAuthenticationProvider::class);
+            $valid = $provider->verify(decrypt($user->two_factor_secret), $request->two_factor_code);
+
+            if (! $valid) {
+                $tries = $user->failed_two_factor_attempts + 1;
+                $lockedUntil = $tries >= self::MAX_2FA_ATTEMPTS ? now()->addMinutes(self::TWO_FACTOR_LOCKOUT_MINUTES) : null;
+
+                $user->update([
+                    'failed_two_factor_attempts' => $tries,
+                    'two_factor_locked_until' => $lockedUntil,
+                ]);
+
+                if ($lockedUntil) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => '2FA temporÃ¤r gesperrt. Bitte spÃ¤ter erneut versuchen.',
+                        'data' => [
+                            'locked_until' => $lockedUntil->toDateTimeString(),
+                            'two_factor_locked' => true,
+                        ],
+                    ], 423);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => '2FA-Code ist ungÃ¼ltig.',
+                    'data' => [
+                        'two_factor_required' => true,
+                        'remaining_2fa_attempts' => self::MAX_2FA_ATTEMPTS - $tries,
+                    ],
+                ], 422);
+            }
+        }
+
+        $user->update([
+            'failed_login_attempts' => 0,
+            'locked_until' => null,
+            'failed_two_factor_attempts' => 0,
+            'two_factor_locked_until' => null,
+        ]);
+
+        $expiresAt = now()->addDays(30);
+
+        $token = $user->createToken(
+            $request->device_name,
+            $user->tokenAbilities(),
+            $expiresAt
+        )->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Login erfolgreich',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                ],
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'expires_at' => $expiresAt->toDateTimeString(),
+                'abilities' => $user->tokenAbilities(),
+            ],
+        ]);
+    }
+}
+
+
+========== PasswordResetController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Password;
+
+class PasswordResetController extends Controller
+{
+    public function sendResetLink(Request $request): JsonResponse
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $status = Password::sendResetLink($request->only('email'));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Wenn ein Account existiert, wurde ein Reset-Link gesendet.',
+        ]);
+    }
+
+    public function reset(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string', 'confirmed', 'min:8'],
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->forceFill(['password' => $password])->save();
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Reset fehlgeschlagen.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Dein Passwort wurde erfolgreich zurÃ¼ckgesetzt.',
+        ]);
+    }
+}
+
+
+========== RegisterController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Actions\Fortify\CreateNewUser;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class RegisterController extends Controller
+{
+    public function register(Request $request, CreateNewUser $creator): JsonResponse
+    {
+        $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'confirmed', 'min:8'],
+            'device_name' => ['required', 'string', 'max:255'],
+            'account_type' => ['sometimes', 'in:public,private']
+        ]);
+
+        $user = $creator->create($request->only('name', 'email', 'password', 'password_confirmation'));
+
+        $user->sendEmailVerificationNotification();
+
+        $expiresAt = now()->addDays(30);
+
+        $token = $user->createToken(
+            $request->device_name,
+            $user->tokenAbilities(),
+            $expiresAt
+        )->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registrierung erfolgreich. Bitte verifiziere deine E-Mail-Adresse.',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                    'created_at' => $user->created_at?->toDateTimeString(),
+                ],
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'expires_at' => $expiresAt->toDateTimeString(),
+            ],
+        ], 201);
+    }
+}
+
+
+========== TwoFactorController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Fortify\Actions\ConfirmTwoFactorAuthentication;
+use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
+use Laravel\Fortify\Actions\EnableTwoFactorAuthentication;
+use Laravel\Fortify\Actions\GenerateNewRecoveryCodes;
+
+class TwoFactorController extends Controller
+{
+    private function requirePassword(Request $request): ?JsonResponse
+    {
+        $request->validate(['password' => ['required', 'string']]);
+
+        if (!Hash::check($request->password, $request->user()->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Passwort ist falsch.',
+            ], 422);
+        }
+
+        return null;
+    }
+
+    public function enable(Request $request, EnableTwoFactorAuthentication $enable): JsonResponse
+    {
+        if ($res = $this->requirePassword($request)) return $res;
+
+        $enable($request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => '2FA aktiviert. Bitte QR-Code abrufen und danach bestÃ¤tigen.',
+        ]);
+    }
+
+    public function qr(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user->two_factor_secret) {
+            return response()->json([
+                'success' => false,
+                'message' => '2FA ist nicht aktiviert.',
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'svg' => $user->twoFactorQrCodeSvg(),
+            ],
+        ]);
+    }
+
+    public function confirm(Request $request, ConfirmTwoFactorAuthentication $confirm): JsonResponse
+    {
+        $request->validate([
+            'code' => ['required', 'digits:6'],
+        ]);
+
+        $confirm($request->user(), $request->code);
+
+        return response()->json([
+            'success' => true,
+            'message' => '2FA erfolgreich bestÃ¤tigt.',
+        ]);
+    }
+
+    public function disable(Request $request, DisableTwoFactorAuthentication $disable): JsonResponse
+    {
+        if ($res = $this->requirePassword($request)) return $res;
+
+        $disable($request->user());
+
+        return response()->json([
+            'success' => true,
+            'message' => '2FA deaktiviert.',
+        ]);
+    }
+}
+
+
+========== ModerationController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Moderation\Actions;
+
+use App\Http\Controllers\Controller;
+use App\Models\Ban;
+use App\Models\Report;
+use App\Models\User;
+use App\Models\Warning;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class ModerationController extends Controller
+{
+    public function reports(): JsonResponse
+    {
+        $reports = Report::where('status', 'pending')
+            ->with(['reporter:id,name', 'reportedUser:id,name', 'category:id,name'])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => $reports,
+        ]);
+    }
+
+    public function resolve(Request $request, Report $report): JsonResponse
+    {
+        if ($report->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Report bereits bearbeitet.',
+            ], 400);
+        }
+
+        $user = $report->reportedUser;
+        $admin = $request->user();
+
+        Warning::create([
+            'user_id' => $user->id,
+            'category_id' => $report->category_id,
+            'reason' => "Report bestÃ¤tigt: {$report->category->name}",
+            'points' => $report->category->points,
+            'type' => 'manual',
+            'issued_by' => $admin->id,
+            'is_active' => true,
+        ]);
+
+        $report->update([
+            'status' => 'resolved',
+            'handled_by' => $admin->id,
+            'handled_at' => now(),
+        ]);
+
+        $points = (int) Warning::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->sum('points');
+
+        if ($points >= 6) {
+
+            Ban::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->update([
+                    'is_active' => false,
+                    'lifted_at' => now(),
+                    'lifted_by' => $admin->id,
+                    'lift_reason' => 'Ersetzt durch neue Sperre',
+                ]);
+
+            $until = now()->addHours(24);
+
+            Ban::create([
+                'user_id' => $user->id,
+                'reason' => "Zu viele Punkte ({$points})",
+                'type' => 'temporary',
+                'starts_at' => now(),
+                'until' => $until,
+                'banned_by' => $admin->id,
+                'is_active' => true,
+            ]);
+
+            $user->update([
+                'is_banned' => true,
+                'banned_until' => $until,
+            ]);
+
+            $user->tokens()->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Report bestÃ¤tigt.',
+        ]);
+    }
+
+    public function dismiss(Request $request, Report $report): JsonResponse
+    {
+        if ($report->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Report bereits bearbeitet.',
+            ], 400);
+        }
+
+        $report->update([
+            'status' => 'dismissed',
+            'handled_by' => $request->user()->id,
+            'handled_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Report abgelehnt.',
+        ]);
+    }
+
+    public function ban(Request $request, User $user): JsonResponse
+    {
+        $request->validate([
+            'reason' => ['required', 'string'],
+            'hours' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $admin = $request->user();
+        $until = $request->hours ? now()->addHours($request->hours) : null;
+
+        Ban::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->update([
+                'is_active' => false,
+                'lifted_at' => now(),
+                'lifted_by' => $admin->id,
+                'lift_reason' => 'Ersetzt durch neue Sperre',
+            ]);
+
+        Ban::create([
+            'user_id' => $user->id,
+            'reason' => $request->reason,
+            'type' => $until ? 'temporary' : 'permanent',
+            'starts_at' => now(),
+            'until' => $until,
+            'banned_by' => $admin->id,
+            'is_active' => true,
+        ]);
+
+        $user->update([
+            'is_banned' => true,
+            'banned_until' => $until,
+        ]);
+
+        $user->tokens()->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User gesperrt.',
+        ]);
+    }
+
+    public function unban(Request $request, User $user): JsonResponse
+    {
+        $admin = $request->user();
+
+        Ban::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->update([
+                'is_active' => false,
+                'lifted_at' => now(),
+                'lifted_by' => $admin->id,
+                'lift_reason' => $request->reason ?? 'Manuell aufgehoben',
+            ]);
+
+        $user->update([
+            'is_banned' => false,
+            'banned_until' => null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Sperre aufgehoben.',
+        ]);
+    }
+}
+
+
+========== ReportController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Moderation\Reports;
+
+use App\Http\Controllers\Controller;
+use App\Models\Ban;
+use App\Models\Report;
+use App\Models\ReportCategory;
+use App\Models\User;
+use App\Models\Warning;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class ReportController extends Controller
+{
+    public function categories(): JsonResponse
+    {
+        $categories = ReportCategory::where('is_active', true)
+            ->orderBy('priority', 'desc')
+            ->get(['slug', 'name', 'description']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $categories,
+        ]);
+    }
+
+    public function store(Request $request, User $user): JsonResponse
+    {
+        $request->validate([
+            'category' => ['required', 'string'],
+            'reason' => ['nullable', 'string', 'max:500'],
+            'content_type' => ['required', 'string', 'in:post,comment,message,profile'],
+            'content_id' => ['required', 'integer'],
+        ]);
+
+        $reporter = $request->user();
+
+        if ($reporter->id === $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du kannst dich nicht selbst melden.',
+            ], 400);
+        }
+
+        $category = ReportCategory::where('slug', $request->category)->first();
+
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kategorie nicht gefunden.',
+            ], 404);
+        }
+
+        $alreadyReported = Report::where('reporter_id', $reporter->id)
+            ->where('category_id', $category->id)
+            ->where('content_type', $request->content_type)
+            ->where('content_id', $request->content_id)
+            ->exists();
+
+        if ($alreadyReported) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du hast diesen Inhalt bereits gemeldet.',
+            ], 400);
+        }
+
+        $report = Report::create([
+            'reporter_id' => $reporter->id,
+            'reported_user_id' => $user->id,
+            'category_id' => $category->id,
+            'reason' => $request->reason,
+            'content_type' => $request->content_type,
+            'content_id' => $request->content_id,
+            'status' => 'pending',
+        ]);
+
+        $reportCount = Report::where('reported_user_id', $user->id)
+            ->where('category_id', $category->id)
+            ->where('status', 'pending')
+            ->count();
+
+        if ($reportCount >= $category->threshold) {
+
+            Warning::create([
+                'user_id' => $user->id,
+                'category_id' => $category->id,
+                'reason' => "Automatisch: {$reportCount}x {$category->name}",
+                'points' => $category->points,
+                'type' => 'automatic',
+                'is_active' => true,
+            ]);
+
+            Report::where('reported_user_id', $user->id)
+                ->where('category_id', $category->id)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'resolved',
+                    'handled_at' => now(),
+                    'admin_note' => 'Auto-resolved',
+                ]);
+
+            $points = (int) Warning::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->sum('points');
+
+            if ($points >= 6) {
+                $until = now()->addHours(24);
+
+                Ban::create([
+                    'user_id' => $user->id,
+                    'reason' => "Automatisch: {$points} Punkte",
+                    'type' => 'temporary',
+                    'starts_at' => now(),
+                    'until' => $until,
+                    'is_active' => true,
+                ]);
+
+                $user->update([
+                    'is_banned' => true,
+                    'banned_until' => $until,
+                ]);
+
+                $user->tokens()->delete();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Meldung eingereicht.',
+            'data' => ['report_id' => $report->id],
+        ], 201);
+    }
+
+    public function myWarnings(Request $request): JsonResponse
+    {
+        $warnings = Warning::where('user_id', $request->user()->id)
+            ->with('category:id,name')
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $warnings,
+        ]);
+    }
+
+    public function myStatus(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $points = (int) Warning::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->sum('points');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'points' => $points,
+                'max_points' => 6,
+                'is_banned' => $user->is_banned,
+                'banned_until' => $user->banned_until,
+            ],
+        ]);
+    }
+}
+
+
+========== CommentController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Posts;
+
+use App\Http\Controllers\Controller;
+use App\Models\Post;
+use App\Models\Comment;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+/**
+ * CommentController
+ *
+ * Verwaltet Comments auf Posts.
+ * UnterstÃ¼tzt auch verschachtelte Replies (Antworten auf Comments).
+ */
+class CommentController extends Controller
+{
+    /**
+     * Alle Comments eines Posts abrufen
+     *
+     * Gibt nur Top-Level Comments zurÃ¼ck (parent_id = null).
+     * Replies werden als verschachtelte Daten mitgeladen.
+     *
+     * @param Post $post Der Post dessen Comments abgerufen werden
+     * @return JsonResponse Paginierte Comment-Liste mit Replies
+     */
+    public function index(Post $post): JsonResponse
+    {
+        $comments = $post->comments()
+            ->with(['user', 'replies.user'])  // LÃ¤dt User-Daten fÃ¼r Comments und Replies
+            ->whereNull('parent_id')           // Nur Top-Level Comments
+            ->latest()                         // Neueste zuerst
+            ->paginate(20);
+
+        return response()->json($comments);
+    }
+
+    /**
+     * Neuen Comment erstellen
+     *
+     * Kann ein Top-Level Comment oder eine Reply auf einen anderen Comment sein.
+     * FÃ¼r Replies muss parent_id mitgeschickt werden.
+     *
+     * @param Request $request EnthÃ¤lt 'body' (required) und 'parent_id' (optional fÃ¼r Replies)
+     * @param Post $post Der Post auf dem kommentiert wird
+     * @return JsonResponse Der erstellte Comment mit User-Daten
+     */
+    public function store(Request $request, Post $post): JsonResponse
+    {
+        $validated = $request->validate([
+            'body' => 'required|string|max:500',
+            'parent_id' => 'nullable|exists:comments,id',  // Muss existierender Comment sein
+        ]);
+
+        $comment = $post->comments()->create([
+            'user_id' => $request->user()->id,
+            'body' => $validated['body'],
+            'parent_id' => $validated['parent_id'] ?? null,  // null fÃ¼r Top-Level Comments
+        ]);
+
+        // User-Daten fÃ¼r Response mitladen
+        $comment->load('user');
+
+        return response()->json($comment, 201);
+    }
+
+    /**
+     * Comment lÃ¶schen
+     *
+     * Nur der Ersteller kann seinen Comment lÃ¶schen.
+     * Durch cascade werden auch alle Replies gelÃ¶scht.
+     *
+     * @param Request $request
+     * @param Comment $comment Der zu lÃ¶schende Comment
+     * @return JsonResponse BestÃ¤tigungsnachricht oder 403
+     */
+    public function destroy(Request $request, Comment $comment): JsonResponse
+    {
+        // PrÃ¼fen ob der User der Ersteller ist
+        if ($request->user()->id !== $comment->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $comment->delete();
+
+        return response()->json(['message' => 'Comment deleted']);
+    }
+}
+
+
+========== PostController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Posts;
+
+use App\Http\Controllers\Controller;
+use App\Models\Post;
+use App\Services\ForYouFeedService;
+use App\Services\ImageUploadService;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+/**
+ * PostController
+ *
+ * Verwaltet alle CRUD-Operationen fÃ¼r Posts.
+ * Benutzer kÃ¶nnen Posts erstellen, lesen, updaten und lÃ¶schen.
+ */
+class PostController extends Controller
+{
+    public function __construct(
+        private ImageUploadService $imageService
+    ) {}
+
+    /**
+     * Alle Posts abrufen
+     *
+     * Gibt eine paginierte Liste aller Posts zurÃ¼ck.
+     * Inkludiert: User-Daten, Comments, Like/Dislike Counts
+     * Sortierung: Neueste zuerst
+     *
+     * @return JsonResponse Paginierte Post-Liste
+     */
+    public function index(): JsonResponse
+    {
+        $posts = Post::with(['user', 'comments'])
+            ->withCount([
+                'likes as likes_count' => fn($q) => $q->where('is_like', true),
+                'likes as dislikes_count' => fn($q) => $q->where('is_like', false),
+            ])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json($posts);
+    }
+
+    /**
+     * Neuen Post erstellen
+     *
+     * Erstellt einen Post fÃ¼r den eingeloggten User.
+     * Akzeptiert multipart/form-data mit optionalem Bild.
+     *
+     * @param Request $request EnthÃ¤lt 'description' (required) und 'image' (optional file)
+     * @return JsonResponse Der erstellte Post mit Status 201
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'description' => 'required|string|max:1000',
+            'image' => 'nullable|image|mimes:jpeg,png,gif,webp|max:5120',
+        ]);
+
+        $imagePath = null;
+
+        // Bild hochladen falls vorhanden
+        if ($request->hasFile('image')) {
+            try {
+                $imagePath = $this->imageService->upload(
+                    $request->file('image'),
+                    'posts'
+                );
+            } catch (\InvalidArgumentException $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ], 422);
+            }
+        }
+
+        $post = $request->user()->posts()->create([
+            'description' => $validated['description'],
+            'image_path' => $imagePath,
+        ]);
+
+        $post->load('user');
+
+        return response()->json([
+            'success' => true,
+            'data' => $post
+        ], 201);
+    }
+
+    /**
+     * Einzelnen Post anzeigen
+     *
+     * Gibt einen Post mit allen Details zurÃ¼ck.
+     * Inkludiert: User, Comments mit deren User-Daten, Like/Dislike Counts
+     *
+     * @param Post $post Der Post (automatisch via Route Model Binding)
+     * @return JsonResponse Post mit allen Relations
+     */
+    public function show(Post $post): JsonResponse
+    {
+        $post->load(['user', 'comments.user'])
+            ->loadCount([
+                'likes as likes_count' => fn($q) => $q->where('is_like', true),
+                'likes as dislikes_count' => fn($q) => $q->where('is_like', false),
+            ]);
+
+        return response()->json($post);
+    }
+
+    /**
+     * Alle Posts eines bestimmten Users abrufen
+     *
+     * Gibt alle Posts eines Users zurÃ¼ck, sortiert nach Datum.
+     * Inkludiert: User-Daten, Like/Dislike Counts, Comment Count
+     *
+     * @param int $userId Die ID des Users dessen Posts geladen werden
+     * @return JsonResponse Paginierte Post-Liste des Users
+     */
+    public function byUser(int $userId): JsonResponse
+    {
+        $posts = Post::where('user_id', $userId)
+            ->with('user')
+            ->withCount([
+                'likes as likes_count' => fn($q) => $q->where('is_like', true),
+                'likes as dislikes_count' => fn($q) => $q->where('is_like', false),
+                'comments'
+            ])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => $posts
+        ]);
+    }
+
+    /**
+     * Post aktualisieren
+     *
+     * Nur der Ersteller des Posts kann diesen bearbeiten.
+     * Bild kann ersetzt oder entfernt werden.
+     *
+     * @param Request $request EnthÃ¤lt die zu aktualisierenden Felder
+     * @param Post $post Der zu aktualisierende Post
+     * @return JsonResponse Aktualisierter Post oder 403 wenn nicht autorisiert
+     */
+    public function update(Request $request, Post $post): JsonResponse
+    {
+        if ($request->user()->id !== $post->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'description' => 'sometimes|string|max:1000',
+            'image' => 'nullable|image|mimes:jpeg,png,gif,webp|max:5120',
+            'remove_image' => 'sometimes|boolean',
+        ]);
+
+        // Bild entfernen falls gewÃ¼nscht
+        if ($request->boolean('remove_image')) {
+            $this->imageService->delete($post->image_path);
+            $post->image_path = null;
+        }
+
+        // Neues Bild hochladen (ersetzt altes automatisch)
+        if ($request->hasFile('image')) {
+            try {
+                $post->image_path = $this->imageService->upload(
+                    $request->file('image'),
+                    'posts',
+                    $post->image_path
+                );
+            } catch (\InvalidArgumentException $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage()
+                ], 422);
+            }
+        }
+
+        // Description aktualisieren falls vorhanden
+        if (isset($validated['description'])) {
+            $post->description = $validated['description'];
+        }
+
+        $post->save();
+
+        return response()->json([
+            'success' => true,
+            'data' => $post
+        ]);
+    }
+
+    /**
+     * Posts von Usern denen ich folge (Following Feed)
+     *
+     * Zeigt nur Posts von Usern an, denen der eingeloggte User folgt.
+     * Sortiert nach Datum (neueste zuerst).
+     *
+     * @param Request $request
+     * @return JsonResponse Paginierte Posts von gefolgten Usern
+     */
+    public function following(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $followingIds = $user->following()->pluck('users.id');
+
+        $posts = Post::whereIn('user_id', $followingIds)
+            ->with('user')
+            ->withCount([
+                'likes as likes_count' => fn($q) => $q->where('is_like', true),
+                'likes as dislikes_count' => fn($q) => $q->where('is_like', false),
+                'comments'
+            ])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => $posts
+        ]);
+    }
+
+    /**
+     * Posts von Freunden (Friends Feed)
+     *
+     * Zeigt nur Posts von Usern an, mit denen eine gegenseitige Follow-Beziehung besteht.
+     * Freund = Ich folge dem User UND der User folgt mir.
+     *
+     * @param Request $request
+     * @return JsonResponse Paginierte Posts von Freunden
+     */
+    public function friends(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $followingIds = $user->following()->pluck('users.id');
+        $followerIds = $user->followers()->pluck('users.id');
+        $friendIds = $followingIds->intersect($followerIds);
+
+        $posts = Post::whereIn('user_id', $friendIds)
+            ->with('user')
+            ->withCount([
+                'likes as likes_count' => fn($q) => $q->where('is_like', true),
+                'likes as dislikes_count' => fn($q) => $q->where('is_like', false),
+                'comments'
+            ])
+            ->latest()
+            ->paginate(20);
+
+        return response()->json([
+            'success' => true,
+            'data' => $posts
+        ]);
+    }
+
+    /**
+     * For You Page - Personalisierter Post-Feed
+     *
+     * Gibt Posts zurÃ¼ck basierend auf Engagement-Score und Time-Decay.
+     * Eigene Posts und bereits interagierte Posts werden ausgeschlossen.
+     *
+     * @param Request $request
+     * @param ForYouFeedService $feedService
+     * @return JsonResponse Posts mit Scoring-Metadaten
+     */
+    public function forYou(Request $request, ForYouFeedService $feedService): JsonResponse
+    {
+        $validated = $request->validate([
+            'limit' => 'sometimes|integer|min:1|max:20',
+            'offset' => 'sometimes|integer|min:0',
+        ]);
+
+        $result = $feedService->getForUser(
+            user: $request->user(),
+            limit: $validated['limit'] ?? null,
+            offset: $validated['offset'] ?? 0
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $result['posts'],
+            'meta' => [
+                'count' => $result['posts']->count(),
+                'has_more' => $result['has_more'],
+                'offset' => ($validated['offset'] ?? 0) + $result['posts']->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Post lÃ¶schen
+     *
+     * Nur der Ersteller kann seinen Post lÃ¶schen.
+     * LÃ¶scht auch das zugehÃ¶rige Bild.
+     *
+     * @param Request $request
+     * @param Post $post Der zu lÃ¶schende Post
+     * @return JsonResponse BestÃ¤tigungsnachricht oder 403
+     */
+    public function destroy(Request $request, Post $post): JsonResponse
+    {
+        if ($request->user()->id !== $post->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Bild lÃ¶schen falls vorhanden
+        if ($post->image_path) {
+            $this->imageService->delete($post->image_path);
+        }
+
+        $post->delete();
+
+        return response()->json(['message' => 'Post deleted']);
+    }
+}
+
+
+========== PostLikeController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\Posts;
+
+use App\Http\Controllers\Controller;
+use App\Models\Post;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+/**
+ * PostLikeController
+ *
+ * Verwaltet Like/Dislike Reactions auf Posts.
+ * Jeder User kann pro Post nur eine Reaction haben.
+ */
+class PostLikeController extends Controller
+{
+    /**
+     * Like oder Dislike setzen
+     *
+     * Erstellt eine neue Reaction oder aktualisiert eine bestehende.
+     * updateOrCreate verhindert doppelte EintrÃ¤ge pro User/Post.
+     *
+     * @param Request $request EnthÃ¤lt 'is_like' (true = Like, false = Dislike)
+     * @param Post $post Der Post fÃ¼r die Reaction
+     * @return JsonResponse Die erstellte/aktualisierte Reaction
+     */
+    public function store(Request $request, Post $post): JsonResponse
+    {
+        $validated = $request->validate([
+            'is_like' => 'required|boolean',
+        ]);
+
+        // updateOrCreate: Sucht nach user_id, erstellt oder updated
+        $like = $post->likes()->updateOrCreate(
+            ['user_id' => $request->user()->id],  // Suchkriterium
+            ['is_like' => $validated['is_like']]   // Zu setzende Werte
+        );
+
+        return response()->json($like);
+    }
+
+    /**
+     * Reaction entfernen
+     *
+     * LÃ¶scht die Like/Dislike Reaction des Users auf diesem Post.
+     *
+     * @param Request $request
+     * @param Post $post Der Post von dem die Reaction entfernt wird
+     * @return JsonResponse BestÃ¤tigungsnachricht
+     */
+    public function destroy(Request $request, Post $post): JsonResponse
+    {
+        // LÃ¶scht nur die Reaction des eingeloggten Users
+        $post->likes()->where('user_id', $request->user()->id)->delete();
+
+        return response()->json(['message' => 'Reaction removed']);
+    }
+}
+
+
+========== SearchController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\User;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class SearchController extends Controller
+{
+    public function users(Request $request): JsonResponse
+    {
+        $request->validate([
+            'search' => ['required', 'string', 'min:2', 'max:50'],
+        ]);
+
+        $authUser = $request->user();
+        $name = trim($request->input('search'));
+
+        $blockedUserIds = $authUser->blockedUsers()->pluck('users.id');
+        $blockedByUserIds = $authUser->blockedByUsers()->pluck('users.id');
+
+        $users = User::where('id', '!=', $authUser->id)
+            ->where('name', 'like', "%{$name}%")
+            ->whereNotIn('id', $blockedUserIds)
+            ->whereNotIn('id', $blockedByUserIds)
+            ->select('id', 'name', 'account_type')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'users' => $users,
+                'count' => $users->count(),
+            ],
+        ]);
+    }
+}
+
+
+========== UserController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\User;
+
+use App\Http\Controllers\Controller;
+use App\Models\Follow;
+use App\Models\FollowRequest;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+
+class UserController extends Controller
+{
+    public function show(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                    'account_type' => $user->account_type,
+                ],
+            ],
+        ]);
+    }
+
+    public function update(Request $request): JsonResponse
+    {
+        $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'email' => ['sometimes', 'required', 'email', 'max:255', 'unique:users,email,'.$request->user()->id],
+            'account_type' => ['sometimes', 'required', 'in:public,private'],
+        ]);
+
+        $user = $request->user();
+
+        $emailChanged = $request->filled('email') && $request->email !== $user->email;
+
+        $accountTypeChanged = $request->filled('account_type') && $request->account_type !== $user->account_type;
+        $previousAccountType = $user->account_type;
+
+        $user->update($request->only('name', 'email', 'account_type'));
+
+        if ($emailChanged) {
+            $user->forceFill(['email_verified_at' => null])->save();
+            $user->sendEmailVerificationNotification();
+        }
+
+        if ($accountTypeChanged && $previousAccountType === 'private' && $user->account_type === 'public') {
+            $requests = FollowRequest::where('requested_id', $user->id)->get();
+
+            $requests->each(function (FollowRequest $followRequest): void {
+                Follow::firstOrCreate([
+                    'follower_id' => $followRequest->requester_id,
+                    'followed_id' => $followRequest->requested_id,
+                ]);
+
+                $followRequest->delete();
+            });
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $emailChanged
+                ? 'E-Mail geÃ¤ndert. Bitte verifiziere deine neue Adresse.'
+                : 'Profil erfolgreich aktualisiert',
+        ]);
+    }
+
+    public function updateProfilePicture(Request $request): JsonResponse
+    {
+        $request->validate([
+            'profile_picture' => [
+                'required',
+                'image',
+                'mimes:jpeg,jpg,png,webp',
+                'max:5120',
+                'dimensions:min_width=100,min_height=100,max_width=2000,max_height=2000',
+            ],
+        ]);
+
+        $user = $request->user();
+
+        if ($user->profile_picture) {
+            Storage::disk('public')->delete($user->profile_picture);
+        }
+
+        $path = $request->file('profile_picture')->store('profile-pictures', 'public');
+
+        $user->update(['profile_picture' => $path]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profilbild erfolgreich aktualisiert.',
+            'data' => [
+                'profile_picture_url' => $user->profile_picture_url,
+            ],
+        ]);
+    }
+
+    public function deleteProfilePicture(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (!$user->profile_picture) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kein Profilbild vorhanden.',
+            ], 404);
+        }
+
+        Storage::disk('public')->delete($user->profile_picture);
+
+        $user->update(['profile_picture' => null]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profilbild erfolgreich gelÃ¶scht.',
+        ]);
+    }
+
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'confirmed', 'min:8'],
+            'revoke_other_tokens' => ['sometimes', 'boolean'],
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Das aktuelle Passwort ist falsch.',
+            ], 422);
+        }
+
+        $user->update(['password' => $request->password]);
+
+        if ($request->boolean('revoke_other_tokens')) {
+            $current = $user->currentAccessToken();
+            $user->tokens()->where('id', '!=', $current?->id)->delete();
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Passwort erfolgreich geÃ¤ndert',
+        ]);
+    }
+
+    public function destroy(Request $request): JsonResponse
+    {
+        $request->validate([
+            'password' => ['required', 'string'],
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($request->password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Passwort ist falsch.',
+            ], 422);
+        }
+
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Account erfolgreich gelÃ¶scht',
+        ]);
+    }
+}
+
+
+========== BlockController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\User\Relationships;
+
+use App\Http\Controllers\Controller;
+use App\Models\Block;
+use App\Models\Follow;
+use App\Models\FollowRequest;
+use App\Models\User;
+use App\Services\RelationshipService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class BlockController extends Controller
+{
+    public function __construct(
+        private RelationshipService $relationships
+    ) {}
+
+    public function block(Request $request, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+
+        if ($authUser->id === $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du kannst dich nicht selbst blockieren.',
+            ], 422);
+        }
+
+        if ($this->relationships->hasBlocked($authUser, $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User ist bereits blockiert.',
+            ], 422);
+        }
+
+        Block::create([
+            'blocker_id' => $authUser->id,
+            'blocked_id' => $user->id,
+        ]);
+
+        Follow::where('follower_id', $authUser->id)->where('followed_id', $user->id)->delete();
+        Follow::where('follower_id', $user->id)->where('followed_id', $authUser->id)->delete();
+
+        FollowRequest::where('requester_id', $authUser->id)->where('requested_id', $user->id)->delete();
+        FollowRequest::where('requester_id', $user->id)->where('requested_id', $authUser->id)->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User wurde blockiert.',
+        ]);
+    }
+
+    public function unblock(Request $request, User $user): JsonResponse
+    {
+        $deleted = Block::where('blocker_id', $request->user()->id)
+            ->where('blocked_id', $user->id)
+            ->delete();
+
+        if ($deleted === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User ist nicht blockiert.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User wurde entblockiert.',
+        ]);
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $blockedUsers = $request->user()->blockedUsers()
+            ->select('users.id', 'users.name')
+            ->paginate(50);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'blocked_users' => $blockedUsers->items(),
+                'count' => $blockedUsers->total(),
+                'pagination' => [
+                    'current_page' => $blockedUsers->currentPage(),
+                    'last_page' => $blockedUsers->lastPage(),
+                    'per_page' => $blockedUsers->perPage(),
+                    'total' => $blockedUsers->total(),
+                ],
+            ],
+        ]);
+    }
+}
+
+
+========== FollowController.php ==========
+
+<?php
+
+namespace App\Http\Controllers\Api\V1\User\Relationships;
+
+use App\Http\Controllers\Controller;
+use App\Models\Follow;
+use App\Models\FollowRequest;
+use App\Models\User;
+use App\Services\RelationshipService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class FollowController extends Controller
+{
+    public function __construct(
+    private RelationshipService $relationships
+    ) {}
+
+    private function canViewConnections(User $authUser, User $user): bool
+    {
+        if ($this->relationships->hasBlockRelation($authUser, $user)) {
+            return false;
+        }
+
+        if ($user->isPublic()) {
+            return true;
+        }
+
+        if ($authUser->id === $user->id) {
+            return true;
+        }
+
+        return $this->relationships->isFollowing($authUser, $user);
+    }
+
+    public function follow(Request $request, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+
+        if ($authUser->id === $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du kannst dir nicht selbst folgen.',
+            ], 422);
+        }
+
+        if ($this->relationships->isFollowing($authUser, $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du folgst diesem User bereits.',
+            ], 422);
+        }
+
+        if ($this->relationships->hasBlockRelation($authUser, $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aktion nicht mÃ¶glich.',
+            ], 403);
+        }
+
+        if ($user->isPublic()) {
+            Follow::create([
+                'follower_id' => $authUser->id,
+                'followed_id' => $user->id,
+            ]);
+
+            FollowRequest::where('requester_id', $authUser->id)
+                ->where('requested_id', $user->id)
+                ->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Du folgst diesem User jetzt.',
+            ]);
+        }
+
+        if ($this->relationships->hasSentRequestTo($authUser, $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Du hast bereits eine Anfrage gesendet.',
+            ], 422);
+        }
+
+        $followRequest = FollowRequest::create([
+            'requester_id' => $authUser->id,
+            'requested_id' => $user->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Anfrage gesendet. Warte auf BestÃ¤tigung.',
+            'data' => [
+                'request_id' => $followRequest->id,
+            ],
+        ]);
+    }
+
+    public function unfollow(Request $request, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+
+        $deleted = Follow::where('follower_id', $authUser->id)
+            ->where('followed_id', $user->id)
+            ->delete();
+
+        if ($deleted > 0) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Du folgst diesem User nicht mehr.',
+            ]);
+        }
+
+        $deleted = FollowRequest::where('requester_id', $authUser->id)
+            ->where('requested_id', $user->id)
+            ->delete();
+
+        if ($deleted > 0) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Anfrage zurÃ¼ckgezogen.',
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Keine Verbindung gefunden.',
+        ], 404);
+    }
+
+    public function followers(Request $request, User $user): JsonResponse
+    {
+        if (!$this->canViewConnections($request->user(), $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dieses Profil ist privat.',
+            ], 403);
+        }
+
+        $followers = $user->followers()
+            ->select('users.id', 'users.name','users.profile_picture')
+            ->paginate(50);
+
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'followers' => $followers->items(),
+                'count' => $followers->total(),
+                'pagination' => [
+                    'current_page' => $followers->currentPage(),
+                    'last_page' => $followers->lastPage(),
+                    'per_page' => $followers->perPage(),
+                    'total' => $followers->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function following(Request $request, User $user): JsonResponse
+    {
+        if (!$this->canViewConnections($request->user(), $user)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dieses Profil ist privat.',
+            ], 403);
+        }
+
+        $following = $user->following()
+            ->select('users.id', 'users.name', 'users.profile_picture')
+            ->paginate(50);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'following' => $following->items(),
+                'count' => $following->total(),
+                'pagination' => [
+                    'current_page' => $following->currentPage(),
+                    'last_page' => $following->lastPage(),
+                    'per_page' => $following->perPage(),
+                    'total' => $following->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function requests(Request $request): JsonResponse
+    {
+        $pendingRequests = $request->user()->incomingRequests()
+            ->with('requester:id,name')
+            ->latest()
+            ->paginate(50);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'requests' => $pendingRequests->items(),
+                'count' => $pendingRequests->total(),
+                'pagination' => [
+                    'current_page' => $pendingRequests->currentPage(),
+                    'last_page' => $pendingRequests->lastPage(),
+                    'per_page' => $pendingRequests->perPage(),
+                    'total' => $pendingRequests->total(),
+                ],
+            ],
+        ]);
+    }
+
+    public function accept(Request $request, FollowRequest $followRequest): JsonResponse
+    {
+        if ($followRequest->requested_id !== $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Das ist nicht deine Anfrage.',
+            ], 403);
+        }
+
+        Follow::create([
+            'follower_id' => $followRequest->requester_id,
+            'followed_id' => $followRequest->requested_id,
+        ]);
+
+        $followRequest->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Anfrage angenommen. Der User folgt dir jetzt.',
+        ]);
+    }
+
+    public function decline(Request $request, FollowRequest $followRequest): JsonResponse
+    {
+        if ($followRequest->requested_id !== $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Das ist nicht deine Anfrage.',
+            ], 403);
+        }
+
+        $followRequest->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Anfrage abgelehnt.',
+        ]);
+    }
+
+    public function removeFollower(Request $request, User $user): JsonResponse
+    {
+        $deleted = Follow::where('follower_id', $user->id)
+            ->where('followed_id', $request->user()->id)
+            ->delete();
+
+        if ($deleted === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User folgt dir nicht.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Follower entfernt.',
+        ]);
+    }
+
+    public function show(Request $request, User $user): JsonResponse
+    {
+        $authUser = $request->user();
+
+        $data = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'account_type' => $user->account_type,
+            'followers_count' => $user->followers()->count(),
+            'following_count' => $user->following()->count(),
+            'is_following' => $this->relationships->isFollowing($authUser, $user),
+            'has_pending_request' => $this->relationships->hasSentRequestTo($authUser, $user),
+        ];
+
+        if ($this->canViewConnections($authUser, $user)) {
+            $data['is_followed_by'] = $this->relationships->isFollowedBy($authUser, $user);
+            $data['is_mutual'] = $this->relationships->isMutual($authUser, $user);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
+        ]);
+    }
+}

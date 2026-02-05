@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, ActivityIndicator, Alert, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, ActivityIndicator, Alert, ScrollView, Keyboard } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Camera, Image as ImageIcon, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -66,13 +66,15 @@ export default function AddPhotoScreen({ onClose, onSubmit }) {
 
         setIsLoading(true);
         try {
+            // Call parent onSubmit and wait for it
             await onSubmit({
                 description: description.trim(),
                 imageUri: imageUri
             });
+            // Success - parent will close modal
         } catch (error) {
-            // Error handling is done in parent
-        } finally {
+            // Show error to user
+            Alert.alert('Fehler', error.message || 'Post konnte nicht erstellt werden');
             setIsLoading(false);
         }
     };
@@ -82,80 +84,83 @@ export default function AddPhotoScreen({ onClose, onSubmit }) {
     };
 
     return (
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.container}>
-                <StatusBar barStyle="light-content" />
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" />
 
-                <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
-                    <View style={styles.header}>
-                        <TouchableOpacity onPress={onClose} style={styles.backButton}>
-                            <ArrowLeft size={24} color="#fff" />
+            <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={onClose} style={styles.backButton}>
+                        <ArrowLeft size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Neuer Post</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+            </LinearGradient>
+
+            <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+            >
+                {imageUri ? (
+                    <View style={styles.imageContainer}>
+                        <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                        <TouchableOpacity style={styles.removeButton} onPress={clearImage}>
+                            <X size={20} color="#fff" />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Neuer Post</Text>
-                        <View style={{ width: 40 }} />
                     </View>
-                </LinearGradient>
-
-                <View style={styles.content}>
-                    {imageUri ? (
-                        <View style={styles.imageContainer}>
-                            <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                            <TouchableOpacity style={styles.removeButton} onPress={clearImage}>
-                                <X size={20} color="#fff" />
+                ) : (
+                    <View style={styles.placeholderContainer}>
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity style={styles.pickButton} onPress={pickImage}>
+                                <ImageIcon size={32} color="#FF5A5F" />
+                                <Text style={styles.pickButtonText}>Galerie</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.pickButton} onPress={takePhoto}>
+                                <Camera size={32} color="#FF5A5F" />
+                                <Text style={styles.pickButtonText}>Kamera</Text>
                             </TouchableOpacity>
                         </View>
-                    ) : (
-                        <View style={styles.placeholderContainer}>
-                            <View style={styles.buttonRow}>
-                                <TouchableOpacity style={styles.pickButton} onPress={pickImage}>
-                                    <ImageIcon size={32} color="#FF5A5F" />
-                                    <Text style={styles.pickButtonText}>Galerie</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.pickButton} onPress={takePhoto}>
-                                    <Camera size={32} color="#FF5A5F" />
-                                    <Text style={styles.pickButtonText}>Kamera</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-
-                    <View style={styles.descriptionContainer}>
-                        <Text style={styles.descriptionLabel}>Beschreibung *</Text>
-                        <TextInput
-                            style={styles.descriptionInput}
-                            placeholder="Was möchtest du teilen? (max. 1000 Zeichen)"
-                            placeholderTextColor="#999"
-                            value={description}
-                            onChangeText={setDescription}
-                            multiline
-                            maxLength={1000}
-                            textAlignVertical="top"
-                            returnKeyType="done"
-                            blurOnSubmit={true}
-                            onSubmitEditing={Keyboard.dismiss}
-                        />
-                        <Text style={styles.charCount}>{description.length}/1000</Text>
                     </View>
+                )}
 
-                    <TouchableOpacity onPress={handleSubmit} disabled={isLoading || !description.trim()}>
-                        <LinearGradient
-                            colors={['#FF5A5F', '#CE494D']}
-                            style={[styles.submitButton, (!description.trim() || isLoading) && { opacity: 0.5 }]}
-                        >
-                            {isLoading ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.submitButtonText}>Post veröffentlichen</Text>
-                            )}
-                        </LinearGradient>
-                    </TouchableOpacity>
-
-                    <Text style={styles.noteText}>
-                        * Die Beschreibung ist erforderlich. Ein Bild ist optional.
-                    </Text>
+                <View style={styles.descriptionContainer}>
+                    <Text style={styles.descriptionLabel}>Beschreibung *</Text>
+                    <TextInput
+                        style={styles.descriptionInput}
+                        placeholder="Was möchtest du teilen? (max. 1000 Zeichen)"
+                        placeholderTextColor="#999"
+                        value={description}
+                        onChangeText={setDescription}
+                        multiline
+                        maxLength={1000}
+                        textAlignVertical="top"
+                    />
+                    <Text style={styles.charCount}>{description.length}/1000</Text>
                 </View>
-            </View>
-        </TouchableWithoutFeedback>
+
+                <TouchableOpacity
+                    onPress={handleSubmit}
+                    disabled={isLoading || !description.trim()}
+                    activeOpacity={0.8}
+                >
+                    <LinearGradient
+                        colors={['#FF5A5F', '#CE494D']}
+                        style={[styles.submitButton, (!description.trim() || isLoading) && { opacity: 0.5 }]}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.submitButtonText}>Post veröffentlichen</Text>
+                        )}
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                <Text style={styles.noteText}>
+                    * Die Beschreibung ist erforderlich. Ein Bild ist optional.
+                </Text>
+            </ScrollView>
+        </View>
     );
 }
 
@@ -165,7 +170,8 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 15 },
     backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-    content: { flex: 1, padding: 20 },
+    scrollView: { flex: 1 },
+    content: { padding: 20, paddingBottom: 40 },
     imageContainer: { position: 'relative', marginBottom: 20 },
     previewImage: { width: '100%', height: 250, borderRadius: 15, backgroundColor: '#e0e0e0' },
     removeButton: { position: 'absolute', top: 10, right: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },

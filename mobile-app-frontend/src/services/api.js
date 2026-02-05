@@ -379,13 +379,12 @@ export const postService = {
     getPost: async (postId) => apiRequest(`/posts/${postId}`),
 
     /**
-     * Neuen Post erstellen
+     * Neuen Post erstellen (nur Text, ohne Bild)
      * Required: description (max 1000)
-     * Optional: image_url
      */
-    create: async (description, image_url = null) => apiRequest('/posts', {
+    create: async (description) => apiRequest('/posts', {
         method: 'POST',
-        body: JSON.stringify({ description, image_url }),
+        body: JSON.stringify({ description }),
     }),
 
     /**

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Modal, SafeAreaView, Platform, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Modal, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, X, ArrowRight, MessageCircle, Flag } from 'lucide-react-native';
 import { postService } from '../services/api';
@@ -19,51 +19,66 @@ export default function HomeScreen({ user, onBlockUser }) {
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-    useEffect(() => { loadPosts(); }, []);
+    useEffect(() => { loadPosts(true); }, []);
 
-    const loadPosts = async (refresh = false) => {
+    const loadPosts = async (reset = false) => {
+        if (isLoadingMore && !reset) return;
+
         try {
-            if (refresh) {
-                setIsRefreshing(true);
+            if (reset) {
+                setIsLoading(true);
                 setOffset(0);
+            } else {
+                setIsLoadingMore(true);
             }
 
-            const newOffset = refresh ? 0 : offset;
-            const response = await postService.getForYou(10, newOffset);
-            const newPosts = response.data || [];
+            const currentOffset = reset ? 0 : offset;
 
-            if (refresh) {
+            // API: GET /posts/for-you?limit=10&offset=0
+            // Response: { success, data: [...], meta: { count, has_more, offset } }
+            const response = await postService.getForYou(10, currentOffset);
+
+            const newPosts = response.data || [];
+            const meta = response.meta || {};
+
+            if (reset) {
                 setPosts(newPosts);
                 setCurrentIndex(0);
-            } else if (newPosts.length > 0) {
+            } else {
                 setPosts(prev => [...prev, ...newPosts]);
             }
 
-            setHasMore(response.meta?.has_more || newPosts.length > 0);
-            setOffset(response.meta?.offset || newOffset + newPosts.length);
+            // Use offset from response meta, or calculate it
+            // meta.offset is the next offset to use
+            setOffset(meta.offset ?? currentOffset + newPosts.length);
+            setHasMore(meta.has_more ?? newPosts.length >= 10);
+
         } catch (error) {
             console.log('Failed to load posts:', error);
         } finally {
             setIsLoading(false);
-            setIsRefreshing(false);
+            setIsLoadingMore(false);
         }
     };
 
     const handleNext = () => {
         if (currentIndex < posts.length - 1) {
-            setCurrentIndex(currentIndex + 1);
-            // Load more when near end
-            if (currentIndex >= posts.length - 3 && hasMore) {
-                loadPosts();
+            const newIndex = currentIndex + 1;
+            setCurrentIndex(newIndex);
+
+            // Load more when 3 posts from end
+            if (newIndex >= posts.length - 3 && hasMore && !isLoadingMore) {
+                loadPosts(false);
             }
         } else if (hasMore) {
-            loadPosts();
-        } else {
-            setCurrentIndex(0); // Loop back
+            loadPosts(false);
+        } else if (posts.length > 0) {
+            // Loop back to start
+            setCurrentIndex(0);
         }
     };
 
@@ -71,29 +86,36 @@ export default function HomeScreen({ user, onBlockUser }) {
         const post = posts[currentIndex];
         if (!post) return;
 
-        // Optimistic update
         const wasLiked = post.user_has_liked;
+
+        // Optimistic update
         setPosts(prev => prev.map((p, idx) =>
             idx === currentIndex
                 ? {
                     ...p,
                     user_has_liked: !wasLiked,
-                    likes_count: wasLiked ? (p.likes_count || 1) - 1 : (p.likes_count || 0) + 1
+                    likes_count: wasLiked ? Math.max(0, (p.likes_count || 1) - 1) : (p.likes_count || 0) + 1
                 }
                 : p
         ));
 
         try {
             if (wasLiked) {
+                // DELETE /posts/{id}/like - Remove reaction
                 await postService.unlike(post.id);
             } else {
+                // POST /posts/{id}/like { is_like: true }
                 await postService.like(post.id);
             }
         } catch (error) {
             // Revert on error
             setPosts(prev => prev.map((p, idx) =>
                 idx === currentIndex
-                    ? { ...p, user_has_liked: wasLiked, likes_count: wasLiked ? (p.likes_count || 0) + 1 : (p.likes_count || 1) - 1 }
+                    ? {
+                        ...p,
+                        user_has_liked: wasLiked,
+                        likes_count: wasLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 1) - 1)
+                    }
                     : p
             ));
             console.log('Failed to like:', error);
@@ -106,9 +128,22 @@ export default function HomeScreen({ user, onBlockUser }) {
         const post = posts[currentIndex];
         if (!post) return;
 
+        // Optimistic update
+        setPosts(prev => prev.map((p, idx) =>
+            idx === currentIndex
+                ? { ...p, dislikes_count: (p.dislikes_count || 0) + 1 }
+                : p
+        ));
+
         try {
-            await postService.react(post.id, false); // is_like = false
+            // POST /posts/{id}/like { is_like: false }
+            await postService.react(post.id, false);
         } catch (error) {
+            setPosts(prev => prev.map((p, idx) =>
+                idx === currentIndex
+                    ? { ...p, dislikes_count: Math.max(0, (p.dislikes_count || 1) - 1) }
+                    : p
+            ));
             console.log('Failed to dislike:', error);
         }
 
@@ -167,11 +202,17 @@ export default function HomeScreen({ user, onBlockUser }) {
                             <Flag size={moderateScale(18)} color="#FF5A5F" />
                         </TouchableOpacity>
 
-                        <Image
-                            source={{ uri: currentPost?.image_url }}
-                            style={styles.cardImage}
-                            resizeMode="cover"
-                        />
+                        {currentPost?.image_url ? (
+                            <Image
+                                source={{ uri: currentPost.image_url }}
+                                style={styles.cardImage}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <View style={[styles.cardImage, styles.noImagePlaceholder]}>
+                                <Text style={styles.noImageText}>📝</Text>
+                            </View>
+                        )}
 
                         <View style={styles.infoContainer}>
                             <Text style={styles.description} numberOfLines={2}>
@@ -189,6 +230,9 @@ export default function HomeScreen({ user, onBlockUser }) {
                             </View>
                             <Text style={styles.statsText}>
                                 ❤️ {currentPost?.likes_count || 0} • 👎 {currentPost?.dislikes_count || 0} • 💬 {currentPost?.comments_count || 0}
+                            </Text>
+                            <Text style={styles.positionText}>
+                                {currentIndex + 1} / {posts.length}{hasMore ? '+' : ''}
                             </Text>
                         </View>
                     </View>
@@ -224,6 +268,10 @@ export default function HomeScreen({ user, onBlockUser }) {
                             <MessageCircle size={iconSize} color="#333" />
                         </TouchableOpacity>
                     </View>
+
+                    {isLoadingMore && (
+                        <ActivityIndicator size="small" color="#FF5A5F" style={{ marginTop: 10 }} />
+                    )}
                 </View>
 
                 <Modal visible={showComments} animationType="slide" onRequestClose={() => setShowComments(false)}>
@@ -260,6 +308,8 @@ const styles = StyleSheet.create({
     card: { width: SCREEN_WIDTH - scale(24), maxWidth: 400, height: isSmallDevice ? SCREEN_HEIGHT * 0.50 : isMediumDevice ? SCREEN_HEIGHT * 0.52 : SCREEN_HEIGHT * 0.55, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
     flagButton: { position: 'absolute', top: 12, left: 12, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: 8 },
     cardImage: { width: '100%', flex: 1, minHeight: '55%', maxHeight: '70%', backgroundColor: '#eee' },
+    noImagePlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' },
+    noImageText: { fontSize: 60 },
     infoContainer: { padding: 12 },
     description: { fontSize: 15, color: '#333', fontWeight: '600', marginBottom: 6 },
     userInfo: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
@@ -267,6 +317,7 @@ const styles = StyleSheet.create({
     avatarText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
     username: { fontSize: 13, color: '#666', fontWeight: '500' },
     statsText: { fontSize: 12, color: '#888' },
+    positionText: { fontSize: 10, color: '#aaa', marginTop: 2 },
     actionsWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
     actionsContainer: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', paddingHorizontal: scale(15) },
     actionButton: { backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 5 },

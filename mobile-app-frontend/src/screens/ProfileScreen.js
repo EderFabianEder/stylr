@@ -47,18 +47,43 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
 
     const handleAddPhoto = async (photoData) => {
         try {
-            // POST /posts { description, image_url }
-            await postService.create(photoData.description, photoData.imageUri || null);
-            loadUserData(true);
+            let response;
+
+            if (photoData.imageUri) {
+                // Upload image as file via FormData
+                const formData = new FormData();
+                formData.append('description', photoData.description);
+                formData.append('image', {
+                    uri: photoData.imageUri,
+                    type: 'image/jpeg',
+                    name: 'photo.jpg',
+                });
+                response = await postService.createWithImage(formData);
+            } else {
+                // Text-only post
+                response = await postService.create(photoData.description);
+            }
+
+            console.log('Post created:', response);
+
+            // Close modal first
             setShowAddPhoto(false);
+
+            // Reload posts
+            loadUserData(true);
+
+            // Show success
             Alert.alert('Erfolg', 'Post wurde erstellt!');
+
         } catch (error) {
-            Alert.alert('Fehler', error.message || 'Post konnte nicht erstellt werden');
+            console.log('Failed to create post:', error);
+            // Re-throw so AddPhotoScreen can show error
+            throw error;
         }
     };
 
     const handleDeletePost = async (postId) => {
-        Alert.alert('Post löschen', 'Bist du sicher?', [
+        Alert.alert('Post löschen', 'Bist du sicher? Alle Likes und Comments werden mitgelöscht.', [
             { text: 'Abbrechen', style: 'cancel' },
             {
                 text: 'Löschen',
@@ -200,7 +225,10 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
             </TouchableOpacity>
 
             <Modal visible={showAddPhoto} animationType="slide" onRequestClose={() => setShowAddPhoto(false)}>
-                <AddPhotoScreen onClose={() => setShowAddPhoto(false)} onSubmit={handleAddPhoto} />
+                <AddPhotoScreen
+                    onClose={() => setShowAddPhoto(false)}
+                    onSubmit={handleAddPhoto}
+                />
             </Modal>
 
             <Modal visible={showEditProfile} animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
