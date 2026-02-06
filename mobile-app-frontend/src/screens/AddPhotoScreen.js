@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, ActivityIndicator, Alert, ScrollView, Keyboard } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, TextInput, StatusBar, ActivityIndicator, Alert, ScrollView, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, Camera, Image as ImageIcon, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,6 +8,7 @@ export default function AddPhotoScreen({ onClose, onSubmit }) {
     const [imageUri, setImageUri] = useState(null);
     const [description, setDescription] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const scrollViewRef = React.useRef(null);
 
     const pickImage = async () => {
         Keyboard.dismiss();
@@ -97,69 +98,81 @@ export default function AddPhotoScreen({ onClose, onSubmit }) {
                 </View>
             </LinearGradient>
 
-            <ScrollView
-                style={styles.scrollView}
-                contentContainerStyle={styles.content}
-                keyboardShouldPersistTaps="handled"
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={0}
             >
-                {imageUri ? (
-                    <View style={styles.imageContainer}>
-                        <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                        <TouchableOpacity style={styles.removeButton} onPress={clearImage}>
-                            <X size={20} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
-                ) : (
-                    <View style={styles.placeholderContainer}>
-                        <View style={styles.buttonRow}>
-                            <TouchableOpacity style={styles.pickButton} onPress={pickImage}>
-                                <ImageIcon size={32} color="#FF5A5F" />
-                                <Text style={styles.pickButtonText}>Galerie</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.pickButton} onPress={takePhoto}>
-                                <Camera size={32} color="#FF5A5F" />
-                                <Text style={styles.pickButtonText}>Kamera</Text>
+                <ScrollView
+                    ref={scrollViewRef}
+                    style={styles.scrollView}
+                    contentContainerStyle={styles.content}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {imageUri ? (
+                        <View style={styles.imageContainer}>
+                            <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                            <TouchableOpacity style={styles.removeButton} onPress={clearImage}>
+                                <X size={20} color="#fff" />
                             </TouchableOpacity>
                         </View>
+                    ) : (
+                        <View style={styles.placeholderContainer}>
+                            <View style={styles.buttonRow}>
+                                <TouchableOpacity style={styles.pickButton} onPress={pickImage}>
+                                    <ImageIcon size={32} color="#FF5A5F" />
+                                    <Text style={styles.pickButtonText}>Galerie</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.pickButton} onPress={takePhoto}>
+                                    <Camera size={32} color="#FF5A5F" />
+                                    <Text style={styles.pickButtonText}>Kamera</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+
+                    <View style={styles.descriptionContainer}>
+                        <Text style={styles.descriptionLabel}>Beschreibung *</Text>
+                        <TextInput
+                            style={styles.descriptionInput}
+                            placeholder="Was möchtest du teilen? (max. 1000 Zeichen)"
+                            placeholderTextColor="#999"
+                            value={description}
+                            onChangeText={setDescription}
+                            multiline
+                            maxLength={1000}
+                            textAlignVertical="top"
+                            onFocus={() => {
+                                setTimeout(() => {
+                                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                                }, 300);
+                            }}
+                        />
+                        <Text style={styles.charCount}>{description.length}/1000</Text>
                     </View>
-                )}
 
-                <View style={styles.descriptionContainer}>
-                    <Text style={styles.descriptionLabel}>Beschreibung *</Text>
-                    <TextInput
-                        style={styles.descriptionInput}
-                        placeholder="Was möchtest du teilen? (max. 1000 Zeichen)"
-                        placeholderTextColor="#999"
-                        value={description}
-                        onChangeText={setDescription}
-                        multiline
-                        maxLength={1000}
-                        textAlignVertical="top"
-                    />
-                    <Text style={styles.charCount}>{description.length}/1000</Text>
-                </View>
-
-                <TouchableOpacity
-                    onPress={handleSubmit}
-                    disabled={isLoading || !description.trim()}
-                    activeOpacity={0.8}
-                >
-                    <LinearGradient
-                        colors={['#FF5A5F', '#CE494D']}
-                        style={[styles.submitButton, (!description.trim() || isLoading) && { opacity: 0.5 }]}
+                    <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={isLoading || !description.trim()}
+                        activeOpacity={0.8}
                     >
-                        {isLoading ? (
-                            <ActivityIndicator color="#fff" />
-                        ) : (
-                            <Text style={styles.submitButtonText}>Post veröffentlichen</Text>
-                        )}
-                    </LinearGradient>
-                </TouchableOpacity>
+                        <LinearGradient
+                            colors={['#FF5A5F', '#CE494D']}
+                            style={[styles.submitButton, (!description.trim() || isLoading) && { opacity: 0.5 }]}
+                        >
+                            {isLoading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={styles.submitButtonText}>Post veröffentlichen</Text>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
 
-                <Text style={styles.noteText}>
-                    * Die Beschreibung ist erforderlich. Ein Bild ist optional.
-                </Text>
-            </ScrollView>
+                    <Text style={styles.noteText}>
+                        * Die Beschreibung ist erforderlich. Ein Bild ist optional.
+                    </Text>
+                </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 }
