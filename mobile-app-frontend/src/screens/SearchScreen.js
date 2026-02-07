@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -7,79 +7,97 @@ import {
     StyleSheet,
     FlatList,
     StatusBar,
-    Pressable
+    Pressable,
+    ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, X } from 'lucide-react-native';
-// Make sure this file exists in the same directory
+import { userService, followService } from '../services/api';
 import OtherProfileScreen from './OtherProfileScreen';
-
-// If OtherProfileScreen doesn't exist, uncomment this for testing:
-// const OtherProfileScreen = ({ user, onBack }) => (
-//     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-//         <Text style={{ fontSize: 24, marginBottom: 20 }}>Profile: {user?.username}</Text>
-//         <TouchableOpacity onPress={onBack} style={{ padding: 15, backgroundColor: '#FF5A5F', borderRadius: 10 }}>
-//             <Text style={{ color: '#fff' }}>Go Back</Text>
-//         </TouchableOpacity>
-//     </View>
-// );
-
-// Mock Users
-const mockUsers = [
-    { id: 1, username: 'fashionista_23', followers: 1245, following: 534 },
-    { id: 2, username: 'style_hunter', followers: 892, following: 421 },
-    { id: 3, username: 'minimal_look', followers: 2341, following: 123 },
-    { id: 4, username: 'denim_lover', followers: 567, following: 789 },
-    { id: 5, username: 'urban_chic', followers: 3421, following: 234 },
-    { id: 6, username: 'vintage_vibes', followers: 1876, following: 456 },
-    { id: 7, username: 'street_style', followers: 4532, following: 678 },
-    { id: 8, username: 'elegant_ella', followers: 987, following: 345 },
-];
 
 export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUser }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [following, setFollowing] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
+    const [searchTimeout, setSearchTimeout] = useState(null);
 
-    // Filter out blocked users from the list
-    const availableUsers = mockUsers.filter(user =>
-        !blockedUsers.some(blocked => blocked.id === user.id)
-    );
-
-    const [users, setUsers] = useState(availableUsers);
-
-    const handleSearch = (text) => {
+    // Debounced API-Suche
+    const handleSearch = useCallback((text) => {
         setSearchQuery(text);
-        if (text.trim()) {
-            const filtered = availableUsers.filter(user =>
-                user.username.toLowerCase().includes(text.toLowerCase())
-            );
-            setUsers(filtered);
-        } else {
-            setUsers(availableUsers);
-        }
-    };
 
-    const handleFollow = (userId) => {
-        if (following.includes(userId)) {
+        // Vorherigen Timeout löschen
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        if (text.trim().length < 2) {
+            setUsers([]);
+            setHasSearched(false);
+            return;
+        }
+
+        // Debounce: 500ms warten bevor API-Call
+        const timeout = setTimeout(async () => {
+            setIsLoading(true);
+            setHasSearched(true);
+            try {
+                const response = await userService.searchUsers(text.trim());
+                const results = response.data?.users || response.data?.data || [];
+
+                // Blockierte User und eigenen Account filtern
+                const filtered = results.filter(user =>
+                    !blockedUsers.some(blocked => blocked.id === user.id) &&
+                    user.id !== currentUser?.id
+                );
+
+                setUsers(filtered);
+            } catch (error) {
+                console.log('Search failed:', error);
+                setUsers([]);
+            } finally {
+                setIsLoading(false);
+            }
+        }, 500);
+
+        setSearchTimeout(timeout);
+    }, [blockedUsers, currentUser, searchTimeout]);
+
+    const handleFollow = async (userId) => {
+        const isCurrentlyFollowing = following.includes(userId);
+
+        // Optimistic update
+        if (isCurrentlyFollowing) {
             setFollowing(following.filter(id => id !== userId));
         } else {
             setFollowing([...following, userId]);
         }
+
+        try {
+            if (isCurrentlyFollowing) {
+                await followService.unfollow(userId);
+            } else {
+                await followService.follow(userId);
+            }
+        } catch (error) {
+            // Revert bei Fehler
+            if (isCurrentlyFollowing) {
+                setFollowing(prev => [...prev, userId]);
+            } else {
+                setFollowing(prev => prev.filter(id => id !== userId));
+            }
+            console.log('Follow/Unfollow failed:', error);
+        }
     };
 
     const handleUserPress = (user) => {
-        console.log('User pressed:', user.username);
         setSelectedUser(user);
         setShowProfile(true);
     };
 
     const handleBlockUser = (user) => {
-        if (onBlockUser) {
-            onBlockUser(user);
-        }
-        // Remove from local users list
+        if (onBlockUser) onBlockUser(user);
         setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
     };
 
@@ -88,7 +106,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
         setSelectedUser(null);
     };
 
-    // Show OtherProfileScreen if a user is selected
+    // Profil-Ansicht
     if (showProfile && selectedUser) {
         return (
             <OtherProfileScreen
@@ -102,15 +120,12 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
     }
 
     const renderUser = ({ item }) => {
-        const isFollowing = following.includes(item.id);
+        const isFollowing = following.includes(item.id) || item.is_following;
 
         return (
             <Pressable
                 onPress={() => handleUserPress(item)}
-                style={({ pressed }) => [
-                    styles.userItem,
-                    pressed && styles.userItemPressed
-                ]}
+                style={({ pressed }) => [styles.userItem, pressed && styles.userItemPressed]}
             >
                 <LinearGradient
                     colors={['#FF5A5F', '#CE494D']}
@@ -119,14 +134,14 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                     style={styles.userAvatar}
                 >
                     <Text style={styles.userAvatarText}>
-                        {item.username.charAt(0).toUpperCase()}
+                        {item.name?.charAt(0).toUpperCase() || 'U'}
                     </Text>
                 </LinearGradient>
 
                 <View style={styles.userInfo}>
-                    <Text style={styles.username}>{item.username}</Text>
+                    <Text style={styles.username}>{item.name}</Text>
                     <Text style={styles.userStats}>
-                        {item.followers} followers · {item.following} following
+                        {item.followers_count ?? 0} followers · {item.following_count ?? 0} following
                     </Text>
                 </View>
 
@@ -168,7 +183,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 style={styles.headerGradient}
             >
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Search Users</Text>
+                    <Text style={styles.headerTitle}>Suche</Text>
                 </View>
             </LinearGradient>
 
@@ -176,16 +191,14 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
                     <Search size={20} color="#666" style={styles.searchIcon} />
-
                     <TextInput
                         style={styles.searchInput}
-                        placeholder="Search users..."
+                        placeholder="User suchen (min. 2 Zeichen)..."
                         placeholderTextColor="#999"
                         value={searchQuery}
                         onChangeText={handleSearch}
                         autoCapitalize="none"
                     />
-
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => handleSearch('')}>
                             <X size={18} color="#999" />
@@ -194,140 +207,55 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 </View>
             </View>
 
+            {/* Loading */}
+            {isLoading && (
+                <ActivityIndicator size="large" color="#FF5A5F" style={{ marginTop: 30 }} />
+            )}
+
             {/* Users List */}
-            <FlatList
-                data={users}
-                renderItem={renderUser}
-                keyExtractor={(item) => item.id.toString()}
-                contentContainerStyle={styles.usersList}
-                ListEmptyComponent={
-                    <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>No users found</Text>
-                    </View>
-                }
-            />
+            {!isLoading && (
+                <FlatList
+                    data={users}
+                    renderItem={renderUser}
+                    keyExtractor={(item) => item.id.toString()}
+                    contentContainerStyle={styles.usersList}
+                    ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                            {hasSearched ? (
+                                <Text style={styles.emptyText}>Keine User gefunden</Text>
+                            ) : (
+                                <Text style={styles.emptyText}>Suche nach Usern...</Text>
+                            )}
+                        </View>
+                    }
+                />
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    headerGradient: {
-        paddingTop: 50,
-    },
-    header: {
-        paddingVertical: 15,
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#fff',
-    },
-    searchContainer: {
-        padding: 15,
-        backgroundColor: '#fff',
-    },
-    searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        borderRadius: 25,
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-    },
-    searchIcon: {
-        marginRight: 10,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        color: '#333',
-        height: 40,
-    },
-    usersList: {
-        padding: 15,
-    },
-    userItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-        cursor: 'pointer',
-    },
-    userItemPressed: {
-        opacity: 0.7,
-        backgroundColor: '#f9f9f9',
-    },
-    userAvatar: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 15,
-    },
-    userAvatarText: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    userInfo: {
-        flex: 1,
-    },
-    username: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 4,
-    },
-    userStats: {
-        fontSize: 13,
-        color: '#666',
-    },
-    followButtonContainer: {
-        zIndex: 10,
-    },
-    followButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-    },
-    followButtonText: {
-        color: '#fff',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    followingButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 8,
-        borderRadius: 20,
-        backgroundColor: '#f5f5f5',
-        borderWidth: 1,
-        borderColor: '#e0e0e0',
-    },
-    followingButtonText: {
-        color: '#666',
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    emptyContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 40,
-    },
-    emptyText: {
-        fontSize: 16,
-        color: '#999',
-    },
+    container: { flex: 1, backgroundColor: '#f5f5f5' },
+    headerGradient: { paddingTop: 50 },
+    header: { paddingVertical: 15, alignItems: 'center' },
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+    searchContainer: { padding: 15, backgroundColor: '#fff' },
+    searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', borderRadius: 25, paddingHorizontal: 15, paddingVertical: 8 },
+    searchIcon: { marginRight: 10 },
+    searchInput: { flex: 1, fontSize: 16, color: '#333', height: 40 },
+    usersList: { padding: 15 },
+    userItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 15, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+    userItemPressed: { opacity: 0.7, backgroundColor: '#f9f9f9' },
+    userAvatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+    userAvatarText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
+    userInfo: { flex: 1 },
+    username: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
+    userStats: { fontSize: 13, color: '#666' },
+    followButtonContainer: { zIndex: 10 },
+    followButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
+    followButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+    followingButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#e0e0e0' },
+    followingButtonText: { color: '#666', fontSize: 14, fontWeight: '600' },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
+    emptyText: { fontSize: 16, color: '#999' },
 });
