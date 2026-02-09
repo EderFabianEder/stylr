@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -10,23 +10,16 @@ import {
     StatusBar,
     ScrollView,
     Platform,
-    Modal
+    Modal,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, MessageCircle, UserX, MoreVertical } from 'lucide-react-native';
+import { ArrowLeft, MessageCircle, UserX, MoreVertical, Lock } from 'lucide-react-native';
+import { userService, followService, postService } from '../services/api';
 import PictureStatsScreen from './PictureStatsScreen';
 
 const { width, height } = Dimensions.get('window');
-
-// Mock data for user's pictures
-const userPictures = [
-    { id: '1', image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400', description: 'Portrait session 📸' },
-    { id: '2', image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400', description: 'Golden hour magic ✨' },
-    { id: '3', image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400', description: 'New look, who dis?' },
-    { id: '4', image: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=400', description: 'Weekend vibes 🌴' },
-    { id: '5', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400', description: 'Feeling happy today!' },
-    { id: '6', image: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400', description: 'Beach day 🏖️' },
-];
 
 export default function OtherProfileScreen({ user, onBack, initialFollowing = false, onBlockUser, currentUser }) {
     const [isFollowing, setIsFollowing] = useState(initialFollowing);
@@ -36,8 +29,90 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
     const [showNestedProfile, setShowNestedProfile] = useState(false);
     const [nestedUser, setNestedUser] = useState(null);
 
-    const handleFollowToggle = () => {
-        setIsFollowing(!isFollowing);
+    // API state
+    const [profileData, setProfileData] = useState(null);
+    const [userPosts, setUserPosts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [followStatus, setFollowStatus] = useState(null);
+    const [isPrivate, setIsPrivate] = useState(false);
+
+    useEffect(() => {
+        loadUserProfile();
+    }, [user?.id]);
+
+    const loadUserProfile = async () => {
+        if (!user?.id) {
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+
+            const profileRes = await userService.getUser(user.id);
+            const profile = profileRes.data || profileRes;
+            setProfileData(profile);
+
+            // Determine follow status
+            const followState = profile.follow_status || profile.is_following;
+            if (followState === 'following' || followState === true) {
+                setIsFollowing(true);
+                setFollowStatus('following');
+            } else if (followState === 'requested' || followState === 'pending') {
+                setFollowStatus('requested');
+                setIsFollowing(false);
+            } else {
+                setIsFollowing(false);
+                setFollowStatus(null);
+            }
+
+            setIsPrivate(profile.account_type === 'private');
+
+            // Load posts
+            try {
+                const postsRes = await postService.getUserPosts(user.id);
+                const posts = postsRes.data?.data || postsRes.data || [];
+                setUserPosts(posts);
+            } catch (postError) {
+                console.log('Posts not accessible:', postError);
+                setUserPosts([]);
+            }
+        } catch (error) {
+            console.log('Failed to load profile:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleFollowToggle = async () => {
+        const userId = user?.id;
+        if (!userId) return;
+
+        const wasFollowing = isFollowing;
+        const prevStatus = followStatus;
+
+        try {
+            if (wasFollowing || followStatus === 'requested') {
+                setIsFollowing(false);
+                setFollowStatus(null);
+                await followService.unfollow(userId);
+            } else {
+                const response = await followService.follow(userId);
+                const status = response.data?.status || response.status;
+
+                if (status === 'requested' || isPrivate) {
+                    setFollowStatus('requested');
+                    setIsFollowing(false);
+                } else {
+                    setIsFollowing(true);
+                    setFollowStatus('following');
+                }
+            }
+        } catch (error) {
+            setIsFollowing(wasFollowing);
+            setFollowStatus(prevStatus);
+            Alert.alert('Error', error.message || 'Action failed');
+        }
     };
 
     const handlePicturePress = (picture) => {
@@ -59,6 +134,17 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
         onBack();
     };
 
+    const getFollowButtonText = () => {
+        if (isFollowing) return 'Following';
+        if (followStatus === 'requested') return 'Requested';
+        return 'Follow';
+    };
+
+    const displayProfile = profileData || user;
+    const displayName = displayProfile?.name || displayProfile?.username || 'User';
+    const followersCount = displayProfile?.followers_count ?? displayProfile?.followers ?? 0;
+    const followingCount = displayProfile?.following_count ?? displayProfile?.following ?? 0;
+
     // Block User Modal
     const BlockUserModal = () => (
         <Modal
@@ -72,7 +158,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                     <View style={styles.modalIconContainer}>
                         <UserX size={40} color="#FF5A5F" strokeWidth={1.5} />
                     </View>
-                    <Text style={styles.modalTitle}>Block {user?.username}?</Text>
+                    <Text style={styles.modalTitle}>Block {displayName}?</Text>
                     <Text style={styles.modalMessage}>
                         They won't be able to find your profile, posts, or contact you. They won't be notified that you blocked them.
                     </Text>
@@ -131,13 +217,28 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
         );
     }
 
+    // Loading state
+    if (isLoading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#fff" />
+            </View>
+        );
+    }
+
     const renderPicture = ({ item }) => (
         <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => handlePicturePress(item)}
         >
             <View style={styles.pictureSquare}>
-                <Image source={{ uri: item.image }} style={styles.squareImage} />
+                {item.image_url ? (
+                    <Image source={{ uri: item.image_url }} style={styles.squareImage} />
+                ) : (
+                    <View style={[styles.squareImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' }]}>
+                        <Text style={{ fontSize: 24 }}>📝</Text>
+                    </View>
+                )}
                 <LinearGradient
                     colors={['transparent', 'rgba(0,0,0,0.3)']}
                     style={styles.pictureOverlay}
@@ -177,11 +278,11 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                     </TouchableOpacity>
 
                     <View style={styles.largeProfilePlaceholder}>
-                        {user?.profilePhoto ? (
-                            <Image source={{ uri: user.profilePhoto }} style={styles.profileImage} />
+                        {displayProfile?.profile_photo_url ? (
+                            <Image source={{ uri: displayProfile.profile_photo_url }} style={styles.profileImage} />
                         ) : (
                             <Text style={styles.placeholderText}>
-                                {user?.username?.charAt(0).toUpperCase() || 'U'}
+                                {displayName.charAt(0).toUpperCase()}
                             </Text>
                         )}
                     </View>
@@ -191,29 +292,28 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                 <View style={styles.infoCard}>
                     <View style={styles.cardHeader}>
                         <View>
-                            <Text style={styles.userNameText}>{user?.username || 'UserName'}</Text>
-                            <Text style={styles.userHandle}>@{user?.username?.toLowerCase() || 'username'}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                <Text style={styles.userNameText}>{displayName}</Text>
+                                {isPrivate && <Lock size={18} color="#888" style={{ marginLeft: 8 }} />}
+                            </View>
+                            <Text style={styles.userHandle}>@{displayName.toLowerCase()}</Text>
                         </View>
                     </View>
 
                     {/* Stats Row */}
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>{userPictures.length}</Text>
+                            <Text style={styles.statValue}>{userPosts.length}</Text>
                             <Text style={styles.statLabel}>Pictures</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>
-                                {user?.followers?.toLocaleString() || '0'}
-                            </Text>
+                            <Text style={styles.statValue}>{followersCount}</Text>
                             <Text style={styles.statLabel}>Followers</Text>
                         </View>
                         <View style={styles.statDivider} />
                         <View style={styles.statItem}>
-                            <Text style={styles.statValue}>
-                                {user?.following?.toLocaleString() || '0'}
-                            </Text>
+                            <Text style={styles.statValue}>{followingCount}</Text>
                             <Text style={styles.statLabel}>Following</Text>
                         </View>
                     </View>
@@ -221,7 +321,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                     {/* Bio Description */}
                     <View style={styles.bioContainer}>
                         <Text style={styles.bioText}>
-                            {user?.bio || 'Fashion enthusiast | Style lover | Creating content that inspires ✨'}
+                            {displayProfile?.description || displayProfile?.bio || 'No bio yet'}
                         </Text>
                     </View>
 
@@ -232,9 +332,9 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                             onPress={handleFollowToggle}
                             style={styles.followButtonWrapper}
                         >
-                            {isFollowing ? (
+                            {isFollowing || followStatus === 'requested' ? (
                                 <View style={styles.followingButton}>
-                                    <Text style={styles.followingButtonText}>Following</Text>
+                                    <Text style={styles.followingButtonText}>{getFollowButtonText()}</Text>
                                 </View>
                             ) : (
                                 <LinearGradient
@@ -255,22 +355,40 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
                         </TouchableOpacity>
                     </View>
 
-                    {/* Gallery Section Header */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Gallery</Text>
-                    </View>
+                    {/* Gallery Section */}
+                    {userPosts.length > 0 && (
+                        <>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Gallery</Text>
+                            </View>
+                            <View style={styles.carouselWrapper}>
+                                <FlatList
+                                    data={userPosts}
+                                    renderItem={renderPicture}
+                                    keyExtractor={item => item.id.toString()}
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.horizontalList}
+                                />
+                            </View>
+                        </>
+                    )}
 
-                    {/* Horizontal Carousel for Pictures */}
-                    <View style={styles.carouselWrapper}>
-                        <FlatList
-                            data={userPictures}
-                            renderItem={renderPicture}
-                            keyExtractor={item => item.id}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.horizontalList}
-                        />
-                    </View>
+                    {/* Private profile message */}
+                    {isPrivate && !isFollowing && userPosts.length === 0 && (
+                        <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+                            <Lock size={40} color="#ccc" />
+                            <Text style={{ color: '#888', marginTop: 10, fontSize: 14 }}>This profile is private</Text>
+                            <Text style={{ color: '#aaa', marginTop: 4, fontSize: 12 }}>Follow to see their posts</Text>
+                        </View>
+                    )}
+
+                    {/* No posts for public profiles */}
+                    {!isPrivate && userPosts.length === 0 && (
+                        <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+                            <Text style={{ color: '#888', fontSize: 14 }}>No posts yet</Text>
+                        </View>
+                    )}
 
                     {/* Extra padding at bottom for scroll */}
                     <View style={styles.bottomPadding} />
@@ -524,7 +642,6 @@ const styles = StyleSheet.create({
     bottomPadding: {
         height: 40,
     },
-    // More button
     moreButton: {
         position: 'absolute',
         top: 50,
@@ -537,7 +654,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 10,
     },
-    // Block Modal styles
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
