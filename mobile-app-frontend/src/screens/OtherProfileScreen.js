@@ -206,7 +206,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
         return (
             <PictureStatsScreen
                 picture={selectedPicture}
-                onClose={() => {
+                onBack={() => {
                     setShowPictureStats(false);
                     setSelectedPicture(null);
                 }}
