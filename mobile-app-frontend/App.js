@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Home, User, Settings } from 'lucide-react-native';
+import { Search, Home, User, Settings, Shield } from 'lucide-react-native';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -10,6 +10,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SearchScreen from './src/screens/SearchScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -17,6 +18,12 @@ export default function App() {
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('home');
     const [blockedUsers, setBlockedUsers] = useState([]);
+
+    // Check if user has admin abilities
+    const isAdmin = user?.abilities?.includes('admin') ||
+        user?.abilities?.includes('moderate') ||
+        user?.is_admin === true ||
+        user?.role === 'admin';
 
     const handleLogin = (userData) => {
         setUser(userData);
@@ -60,6 +67,15 @@ export default function App() {
         );
     }
 
+    // Define tabs - conditionally include admin
+    const tabs = [
+        { key: 'profile', icon: User, label: 'Profile' },
+        { key: 'home', icon: Home, label: 'Home' },
+        { key: 'search', icon: Search, label: 'Search' },
+        ...(isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin' }] : []),
+        { key: 'settings', icon: Settings, label: 'Settings' },
+    ];
+
     // Main App Content
     return (
         <View style={styles.container}>
@@ -70,6 +86,7 @@ export default function App() {
                 {activeTab === 'profile' && <ProfileScreen user={user} onUpdateUser={handleUpdateProfile} onLogout={handleLogout} />}
                 {activeTab === 'search' && <SearchScreen blockedUsers={blockedUsers} onBlockUser={handleBlockUser} currentUser={user} />}
                 {activeTab === 'settings' && <SettingsScreen user={user} onLogout={handleLogout} blockedUsers={blockedUsers} onUnblockUser={handleUnblockUser} />}
+                {activeTab === 'admin' && isAdmin && <AdminDashboardScreen user={user} />}
             </View>
 
             {/* Bottom Navigation with Lucide Icons */}
@@ -80,65 +97,25 @@ export default function App() {
                 style={styles.bottomNavGradient}
             >
                 <View style={styles.bottomNav}>
-                    {/* Profile Tab */}
-                    <TouchableOpacity
-                        style={styles.navItem}
-                        onPress={() => setActiveTab('profile')}
-                    >
-                        <User
-                            size={24}
-                            color="white"
-                            style={activeTab === 'profile' ? styles.navIconActive : styles.navIconInactive}
-                        />
-                        <Text style={[styles.navIconLabel, activeTab === 'profile' && styles.labelActive]}>
-                            Profile
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Home Tab */}
-                    <TouchableOpacity
-                        style={styles.navItem}
-                        onPress={() => setActiveTab('home')}
-                    >
-                        <Home
-                            size={24}
-                            color="white"
-                            style={activeTab === 'home' ? styles.navIconActive : styles.navIconInactive}
-                        />
-                        <Text style={[styles.navIconLabel, activeTab === 'home' && styles.labelActive]}>
-                            Home
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Search Tab */}
-                    <TouchableOpacity
-                        style={styles.navItem}
-                        onPress={() => setActiveTab('search')}
-                    >
-                        <Search
-                            size={24}
-                            color="white"
-                            style={activeTab === 'search' ? styles.navIconActive : styles.navIconInactive}
-                        />
-                        <Text style={[styles.navIconLabel, activeTab === 'search' && styles.labelActive]}>
-                            Search
-                        </Text>
-                    </TouchableOpacity>
-
-                    {/* Settings Tab */}
-                    <TouchableOpacity
-                        style={styles.navItem}
-                        onPress={() => setActiveTab('settings')}
-                    >
-                        <Settings
-                            size={24}
-                            color="white"
-                            style={activeTab === 'settings' ? styles.navIconActive : styles.navIconInactive}
-                        />
-                        <Text style={[styles.navIconLabel, activeTab === 'settings' && styles.labelActive]}>
-                            Settings
-                        </Text>
-                    </TouchableOpacity>
+                    {tabs.map(tab => {
+                        const IconComponent = tab.icon;
+                        return (
+                            <TouchableOpacity
+                                key={tab.key}
+                                style={styles.navItem}
+                                onPress={() => setActiveTab(tab.key)}
+                            >
+                                <IconComponent
+                                    size={24}
+                                    color="white"
+                                    style={activeTab === tab.key ? styles.navIconActive : styles.navIconInactive}
+                                />
+                                <Text style={[styles.navIconLabel, activeTab === tab.key && styles.labelActive]}>
+                                    {tab.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             </LinearGradient>
         </View>
