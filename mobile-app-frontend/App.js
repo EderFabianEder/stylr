@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Home, User, Settings, Shield } from 'lucide-react-native';
+import { Search, Home, User, Settings, Lock } from 'lucide-react-native';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -19,11 +19,14 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('home');
     const [blockedUsers, setBlockedUsers] = useState([]);
 
-    // Check if user has admin abilities
-    const isAdmin = user?.abilities?.includes('admin') ||
-        user?.abilities?.includes('moderate') ||
-        user?.is_admin === true ||
-        user?.role === 'admin';
+    // Admin check - covers: is_admin from DB, or admin/moderate in token abilities
+    const isAdmin = user?.is_admin === true || user?.is_admin === 1 ||
+        user?.abilities?.includes('admin') ||
+        user?.abilities?.includes('moderate');
+
+    // Debug: remove this once admin tab works
+    console.log('User data:', JSON.stringify(user));
+    console.log('isAdmin:', isAdmin);
 
     const handleLogin = (userData) => {
         setUser(userData);
@@ -72,7 +75,7 @@ export default function App() {
         { key: 'profile', icon: User, label: 'Profile' },
         { key: 'home', icon: Home, label: 'Home' },
         { key: 'search', icon: Search, label: 'Search' },
-        ...(isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin' }] : []),
+        ...(isAdmin ? [{ key: 'admin', icon: Lock, label: 'Admin' }] : []),
         { key: 'settings', icon: Settings, label: 'Settings' },
     ];
 

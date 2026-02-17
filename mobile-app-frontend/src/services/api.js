@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 // API Base URL - Live Server
- const API_URL = 'https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1';
+const API_URL = 'https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1';
 
 // Für lokale Entwicklung:
 // const API_URL = 'http://10.0.0.4:8000/api/v1';  // Web

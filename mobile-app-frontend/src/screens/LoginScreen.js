@@ -28,8 +28,12 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
         try {
             const response = await authService.login(email, password, needs2FA ? twoFactorCode : null);
 
-            // Login erfolgreich
-            const userData = response.data?.user || response.data;
+            // Login erfolgreich - merge user data with abilities
+            const userData = {
+                ...(response.data?.user || response.data),
+                abilities: response.data?.abilities || [],
+            };
+            console.log('Login userData:', JSON.stringify(userData));
             onLogin(userData);
 
         } catch (error) {
