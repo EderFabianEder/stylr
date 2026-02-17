@@ -229,13 +229,13 @@ export const userService = {
     /**
      * Eigenes Profil anzeigen
      */
-    getProfile: async () => apiRequest('/user'),
+    getProfile: async () => apiRequest('/user/profile'),
 
     /**
      * Profil aktualisieren
      * Optional: name, email, account_type (public/private)
      */
-    updateProfile: async (data) => apiRequest('/user', {
+    updateProfile: async (data) => apiRequest('/user/profile', {
         method: 'PATCH',
         body: JSON.stringify(data),
     }),
@@ -256,7 +256,7 @@ export const userService = {
      * Required: password
      */
     deleteAccount: async (password) => {
-        const response = await apiRequest('/user', {
+        const response = await apiRequest('/user/account', {
             method: 'DELETE',
             body: JSON.stringify({ password }),
         });
@@ -304,7 +304,7 @@ export const followService = {
     /**
      * Follower entfernen (von eigenem Profil)
      */
-    removeFollower: async (userId) => apiRequest(`/users/${userId}/remove-follower`, { method: 'DELETE' }),
+    removeFollower: async (userId) => apiRequest(`/users/${userId}/follower`, { method: 'DELETE' }),
 
     /**
      * Eingehende Follow-Anfragen (für private Accounts)

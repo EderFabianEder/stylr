@@ -6,6 +6,8 @@ import { postService, userService } from '../services/api';
 import AddPhotoScreen from './AddPhotoScreen';
 import PictureStatsScreen from './PictureStatsScreen';
 import EditProfileScreen from './EditProfileScreen';
+import FollowerListScreen from './FollowerListScreen';
+import OtherProfileScreen from './OtherProfileScreen';
 
 export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUser }) {
     const [posts, setPosts] = useState([]);
@@ -15,6 +17,8 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
     const [profile, setProfile] = useState(null);
+    const [followerListMode, setFollowerListMode] = useState(null);
+    const [viewingUser, setViewingUser] = useState(null);
 
     useEffect(() => { loadUserData(); }, [user?.id]);
 
@@ -144,6 +148,34 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
         );
     }
 
+    // Show other user profile when tapped from follower list
+    if (viewingUser) {
+        return (
+            <OtherProfileScreen
+                user={viewingUser}
+                onBack={() => setViewingUser(null)}
+                currentUser={user}
+            />
+        );
+    }
+
+    // Show follower/following list
+    if (followerListMode) {
+        return (
+            <FollowerListScreen
+                userId={user?.id}
+                mode={followerListMode}
+                onBack={() => setFollowerListMode(null)}
+                onUserPress={(u) => {
+                    setFollowerListMode(null);
+                    if (u.id !== user?.id) {
+                        setViewingUser(u);
+                    }
+                }}
+            />
+        );
+    }
+
     const displayUser = profile || user;
     const isPrivate = displayUser?.account_type === 'private';
 
@@ -176,11 +208,11 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
                             <Text style={styles.statNumber}>{posts.length}</Text>
                             <Text style={styles.statLabel}>Posts</Text>
                         </View>
-                        <TouchableOpacity style={styles.statItem}>
+                        <TouchableOpacity style={styles.statItem} onPress={() => setFollowerListMode('followers')}>
                             <Text style={styles.statNumber}>{displayUser?.followers_count || 0}</Text>
                             <Text style={styles.statLabel}>Follower</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.statItem}>
+                        <TouchableOpacity style={styles.statItem} onPress={() => setFollowerListMode('following')}>
                             <Text style={styles.statNumber}>{displayUser?.following_count || 0}</Text>
                             <Text style={styles.statLabel}>Folge ich</Text>
                         </TouchableOpacity>

@@ -13,158 +13,83 @@ const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * fact
 const isSmallDevice = SCREEN_HEIGHT < 700;
 const isMediumDevice = SCREEN_HEIGHT >= 700 && SCREEN_HEIGHT < 800;
 
-const TABS = [
-    { key: 'forYou', label: 'For You' },
-    { key: 'following', label: 'Following' },
-    { key: 'friends', label: 'Friends' },
-];
-
-const createFeedState = () => ({
-    posts: [],
-    currentIndex: 0,
-    isLoading: true,
-    hasMore: true,
-    isLoadingMore: false,
-    offset: 0,
-    page: 1,
-    loaded: false,
-});
-
 export default function HomeScreen({ user, onBlockUser }) {
-    const [activeTab, setActiveTab] = useState('forYou');
-    const [feeds, setFeeds] = useState({
-        forYou: createFeedState(),
-        following: createFeedState(),
-        friends: createFeedState(),
-    });
+    const [posts, setPosts] = useState([]);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-    const feed = feeds[activeTab];
+    useEffect(() => { loadPosts(true); }, []);
 
-    // Load feed when tab is selected for the first time
-    useEffect(() => {
-        if (!feeds[activeTab].loaded) {
-            loadPosts(activeTab, true);
-        }
-    }, [activeTab]);
-
-    const updateFeed = (tab, updates) => {
-        setFeeds(prev => ({
-            ...prev,
-            [tab]: {
-                ...prev[tab],
-                ...(typeof updates === 'function' ? updates(prev[tab]) : updates),
-            },
-        }));
-    };
-
-    const loadPosts = async (tab, reset = false) => {
-        const currentFeed = feeds[tab];
-        if (currentFeed.isLoadingMore && !reset) return;
-
-        if (reset) {
-            updateFeed(tab, { isLoading: true, offset: 0, page: 1 });
-        } else {
-            updateFeed(tab, { isLoadingMore: true });
-        }
+    const loadPosts = async (reset = false) => {
+        if (isLoadingMore && !reset) return;
 
         try {
-            let newPosts = [];
-            let paginationUpdate = {};
-
-            if (tab === 'forYou') {
-                const currentOffset = reset ? 0 : currentFeed.offset;
-                const response = await postService.getForYou(10, currentOffset);
-                newPosts = response.data || [];
-                const meta = response.meta || {};
-                paginationUpdate = {
-                    offset: meta.offset ?? currentOffset + newPosts.length,
-                    hasMore: meta.has_more ?? newPosts.length >= 10,
-                };
+            if (reset) {
+                setIsLoading(true);
+                setOffset(0);
             } else {
-                const currentPage = reset ? 1 : currentFeed.page;
-                const response = tab === 'following'
-                    ? await postService.getFollowing(currentPage)
-                    : await postService.getFriends(currentPage);
-
-                const paginatedData = response.data || {};
-                newPosts = paginatedData.data || [];
-                paginationUpdate = {
-                    page: (paginatedData.current_page || currentPage) + 1,
-                    hasMore: (paginatedData.current_page || currentPage) < (paginatedData.last_page || 1),
-                };
+                setIsLoadingMore(true);
             }
 
-            updateFeed(tab, prev => ({
-                posts: reset ? newPosts : [...prev.posts, ...newPosts],
-                currentIndex: reset ? 0 : prev.currentIndex,
-                isLoading: false,
-                isLoadingMore: false,
-                loaded: true,
-                ...paginationUpdate,
-            }));
+            const currentOffset = reset ? 0 : offset;
+
+            // API: GET /posts/for-you?limit=10&offset=0
+            // Response: { success, data: [...], meta: { count, has_more, offset } }
+            const response = await postService.getForYou(10, currentOffset);
+
+            const newPosts = response.data || [];
+            const meta = response.meta || {};
+
+            if (reset) {
+                setPosts(newPosts);
+                setCurrentIndex(0);
+            } else {
+                setPosts(prev => [...prev, ...newPosts]);
+            }
+
+            // Use offset from response meta, or calculate it
+            // meta.offset is the next offset to use
+            setOffset(meta.offset ?? currentOffset + newPosts.length);
+            setHasMore(meta.has_more ?? newPosts.length >= 10);
+
         } catch (error) {
-            console.log(`Failed to load ${tab} posts:`, error);
-            updateFeed(tab, { isLoading: false, isLoadingMore: false, loaded: true });
+            console.log('Failed to load posts:', error);
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
         }
     };
 
     const handleNext = () => {
-        const tab = activeTab;
-        const currentFeed = feeds[tab];
+        // Remove current post so it doesn't repeat
+        setPosts(prev => {
+            const updated = prev.filter((_, idx) => idx !== currentIndex);
+            return updated;
+        });
 
-        if (currentFeed.currentIndex < currentFeed.posts.length - 1) {
-            const newIndex = currentFeed.currentIndex + 1;
-            updateFeed(tab, { currentIndex: newIndex });
-
-            if (newIndex >= currentFeed.posts.length - 3 && currentFeed.hasMore && !currentFeed.isLoadingMore) {
-                loadPosts(tab, false);
-            }
-        } else if (currentFeed.hasMore) {
-            loadPosts(tab, false);
-        } else if (currentFeed.posts.length > 0) {
-            updateFeed(tab, { currentIndex: 0 });
+        // If we're running low on posts, load more
+        if (posts.length <= 4 && hasMore && !isLoadingMore) {
+            loadPosts(false);
         }
     };
 
     const handleLike = async () => {
-        const tab = activeTab;
-        const post = feeds[tab].posts[feeds[tab].currentIndex];
+        const post = posts[currentIndex];
         if (!post) return;
 
-        const wasLiked = post.user_has_liked;
-
-        updateFeed(tab, prev => ({
-            posts: prev.posts.map((p, idx) =>
-                idx === prev.currentIndex
-                    ? {
-                        ...p,
-                        user_has_liked: !wasLiked,
-                        likes_count: wasLiked ? Math.max(0, (p.likes_count || 1) - 1) : (p.likes_count || 0) + 1
-                    }
-                    : p
-            ),
-        }));
-
+        // Fire API call (don't need optimistic update since post is removed)
         try {
-            if (wasLiked) {
+            if (post.user_has_liked) {
                 await postService.unlike(post.id);
             } else {
                 await postService.like(post.id);
             }
         } catch (error) {
-            updateFeed(tab, prev => ({
-                posts: prev.posts.map((p, idx) =>
-                    idx === prev.currentIndex
-                        ? {
-                            ...p,
-                            user_has_liked: wasLiked,
-                            likes_count: wasLiked ? (p.likes_count || 0) + 1 : Math.max(0, (p.likes_count || 1) - 1)
-                        }
-                        : p
-                ),
-            }));
             console.log('Failed to like:', error);
         }
 
@@ -172,28 +97,12 @@ export default function HomeScreen({ user, onBlockUser }) {
     };
 
     const handleDislike = async () => {
-        const tab = activeTab;
-        const post = feeds[tab].posts[feeds[tab].currentIndex];
+        const post = posts[currentIndex];
         if (!post) return;
-
-        updateFeed(tab, prev => ({
-            posts: prev.posts.map((p, idx) =>
-                idx === prev.currentIndex
-                    ? { ...p, dislikes_count: (p.dislikes_count || 0) + 1 }
-                    : p
-            ),
-        }));
 
         try {
             await postService.react(post.id, false);
         } catch (error) {
-            updateFeed(tab, prev => ({
-                posts: prev.posts.map((p, idx) =>
-                    idx === prev.currentIndex
-                        ? { ...p, dislikes_count: Math.max(0, (p.dislikes_count || 1) - 1) }
-                        : p
-                ),
-            }));
             console.log('Failed to dislike:', error);
         }
 
@@ -201,73 +110,34 @@ export default function HomeScreen({ user, onBlockUser }) {
     };
 
     const onRefresh = useCallback(() => {
-        loadPosts(activeTab, true);
-    }, [activeTab]);
+        loadPosts(true);
+    }, []);
 
-    const handleTabChange = (tabKey) => {
-        if (tabKey === activeTab) {
-            // Tap same tab = refresh
-            loadPosts(tabKey, true);
-            return;
-        }
-        setActiveTab(tabKey);
-    };
-
-    const currentPost = feed.posts[feed.currentIndex];
+    const currentPost = posts[currentIndex];
     const buttonSize = isSmallDevice ? 50 : isMediumDevice ? 58 : 65;
     const iconSize = isSmallDevice ? 22 : isMediumDevice ? 25 : 28;
 
-    const emptyMessages = {
-        forYou: { title: 'Keine Posts verfügbar', subtitle: 'Folge anderen um deren Posts zu sehen!' },
-        following: { title: 'Keine Posts', subtitle: 'Folge anderen Nutzern um deren Posts hier zu sehen!' },
-        friends: { title: 'Keine Posts', subtitle: 'Wenn du und jemand euch gegenseitig folgt, erscheinen Posts hier!' },
-    };
-
-    const renderTabs = () => (
-        <View style={styles.tabContainer}>
-            {TABS.map((tab) => (
-                <TouchableOpacity
-                    key={tab.key}
-                    style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-                    onPress={() => handleTabChange(tab.key)}
-                    activeOpacity={0.7}
-                >
-                    <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-                        {tab.label}
-                    </Text>
-                </TouchableOpacity>
-            ))}
-        </View>
-    );
-
-    if (feed.isLoading) {
+    if (isLoading) {
         return (
             <SafeAreaView style={styles.safeArea}>
-                <View style={styles.container}>
-                    <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
-                        <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
-                        {renderTabs()}
-                    </LinearGradient>
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#FF5A5F" />
-                        <Text style={styles.loadingText}>Posts werden geladen...</Text>
-                    </View>
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#FF5A5F" />
+                    <Text style={styles.loadingText}>Posts werden geladen...</Text>
                 </View>
             </SafeAreaView>
         );
     }
 
-    if (feed.posts.length === 0) {
+    if (posts.length === 0) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
                         <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
-                        {renderTabs()}
                     </LinearGradient>
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>{emptyMessages[activeTab].title}</Text>
-                        <Text style={styles.emptySubtext}>{emptyMessages[activeTab].subtitle}</Text>
+                        <Text style={styles.emptyText}>Keine Posts verfügbar</Text>
+                        <Text style={styles.emptySubtext}>Folge anderen um deren Posts zu sehen!</Text>
                         <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
                             <Text style={styles.refreshButtonText}>Aktualisieren</Text>
                         </TouchableOpacity>
@@ -283,7 +153,6 @@ export default function HomeScreen({ user, onBlockUser }) {
                 <StatusBar barStyle="light-content" />
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
                     <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
-                    {renderTabs()}
                 </LinearGradient>
 
                 <View style={styles.cardContainer}>
@@ -322,7 +191,7 @@ export default function HomeScreen({ user, onBlockUser }) {
                                 ❤️ {currentPost?.likes_count || 0} • 👎 {currentPost?.dislikes_count || 0} • 💬 {currentPost?.comments_count || 0}
                             </Text>
                             <Text style={styles.positionText}>
-                                {feed.currentIndex + 1} / {feed.posts.length}{feed.hasMore ? '+' : ''}
+                                {posts.length} verbleibend{hasMore ? '+' : ''}
                             </Text>
                         </View>
                     </View>
@@ -359,7 +228,7 @@ export default function HomeScreen({ user, onBlockUser }) {
                         </TouchableOpacity>
                     </View>
 
-                    {feed.isLoadingMore && (
+                    {isLoadingMore && (
                         <ActivityIndicator size="small" color="#FF5A5F" style={{ marginTop: 10 }} />
                     )}
                 </View>
@@ -392,15 +261,10 @@ const styles = StyleSheet.create({
     refreshButton: { backgroundColor: '#FF5A5F', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
     refreshButtonText: { color: '#fff', fontWeight: '600' },
     headerGradient: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-    header: { paddingVertical: verticalScale(8), alignItems: 'center' },
+    header: { paddingVertical: verticalScale(12), alignItems: 'center' },
     logo: { fontSize: moderateScale(22), fontWeight: 'bold', color: '#fff', letterSpacing: 3 },
-    tabContainer: { flexDirection: 'row', justifyContent: 'center', paddingHorizontal: 20, paddingBottom: 12, gap: 6 },
-    tab: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)' },
-    tabActive: { backgroundColor: '#fff' },
-    tabText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
-    tabTextActive: { color: '#FF5A5F' },
     cardContainer: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: scale(12), paddingVertical: verticalScale(10) },
-    card: { width: SCREEN_WIDTH - scale(24), maxWidth: 400, height: isSmallDevice ? SCREEN_HEIGHT * 0.48 : isMediumDevice ? SCREEN_HEIGHT * 0.50 : SCREEN_HEIGHT * 0.53, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+    card: { width: SCREEN_WIDTH - scale(24), maxWidth: 400, height: isSmallDevice ? SCREEN_HEIGHT * 0.50 : isMediumDevice ? SCREEN_HEIGHT * 0.52 : SCREEN_HEIGHT * 0.55, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
     flagButton: { position: 'absolute', top: 12, left: 12, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: 8 },
     cardImage: { width: '100%', flex: 1, minHeight: '55%', maxHeight: '70%', backgroundColor: '#eee' },
     noImagePlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' },
