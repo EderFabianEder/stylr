@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 const API_URL = 'https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1';
 
 // Für lokale Entwicklung:
-// const API_URL = 'http://10.0.0.4:8000/api/v1';  // Web
+// const API_URL = 'http://localhost:8000/api/v1';  // Web
 // const API_URL = 'http://10.0.2.2:8000/api/v1';   // Android Emulator
 // const API_URL = 'http://192.168.x.x:8000/api/v1'; // Physical Device
 
@@ -140,7 +140,6 @@ export const authService = {
 
     /**
      * Aktueller User
-     * GET /auth/user
      */
     getUser: async () => apiRequest('/auth/user'),
 
@@ -174,9 +173,8 @@ export const authService = {
 
     /**
      * Email Verifizierung erneut senden
-     * POST /email/verification-notification
      */
-    resendVerification: async () => apiRequest('/email/verification-notification', { method: 'POST' }),
+    resendVerification: async () => apiRequest('/auth/email/resend', { method: 'POST' }),
 
     /**
      * Check ob eingeloggt
@@ -195,7 +193,7 @@ export const twoFactorService = {
      * 2FA aktivieren
      * Required: password
      */
-    enable: async (password) => apiRequest('/two-factor/enable', {
+    enable: async (password) => apiRequest('/auth/two-factor/enable', {
         method: 'POST',
         body: JSON.stringify({ password }),
     }),
@@ -203,13 +201,13 @@ export const twoFactorService = {
     /**
      * QR Code abrufen
      */
-    getQR: async () => apiRequest('/two-factor/qr'),
+    getQR: async () => apiRequest('/auth/two-factor/qr'),
 
     /**
      * 2FA bestätigen
      * Required: code (6 digits)
      */
-    confirm: async (code) => apiRequest('/two-factor/confirm', {
+    confirm: async (code) => apiRequest('/auth/two-factor/confirm', {
         method: 'POST',
         body: JSON.stringify({ code }),
     }),
@@ -218,7 +216,7 @@ export const twoFactorService = {
      * 2FA deaktivieren
      * Required: password
      */
-    disable: async (password) => apiRequest('/two-factor/disable', {
+    disable: async (password) => apiRequest('/auth/two-factor/disable', {
         method: 'POST',
         body: JSON.stringify({ password }),
     }),
@@ -230,50 +228,20 @@ export const twoFactorService = {
 export const userService = {
     /**
      * Eigenes Profil anzeigen
-     * GET /user/profile
      */
-    getProfile: async () => apiRequest('/user/profile'),
+    getProfile: async () => apiRequest('/user'),
 
     /**
      * Profil aktualisieren
-     * PATCH /user/profile
      * Optional: name, email, account_type (public/private)
      */
-    updateProfile: async (data) => apiRequest('/user/profile', {
+    updateProfile: async (data) => apiRequest('/user', {
         method: 'PATCH',
         body: JSON.stringify(data),
     }),
 
     /**
-     * Profilbild hochladen
-     * POST /user/profile-picture (FormData mit 'profile_picture')
-     */
-    updateProfilePicture: async (formData) => {
-        const token = await AsyncStorage.getItem('authToken');
-        const response = await fetch(`${API_URL}/user/profile-picture`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json',
-            },
-            body: formData,
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw { status: response.status, message: data.message, errors: data.errors };
-        }
-        return data;
-    },
-
-    /**
-     * Profilbild löschen
-     * DELETE /user/profile-picture
-     */
-    deleteProfilePicture: async () => apiRequest('/user/profile-picture', { method: 'DELETE' }),
-
-    /**
      * Passwort ändern
-     * PATCH /user/password
      * Required: current_password, password, password_confirmation
      * Optional: revoke_other_tokens (boolean)
      */
@@ -285,11 +253,10 @@ export const userService = {
 
     /**
      * Account löschen
-     * DELETE /user/account
      * Required: password
      */
     deleteAccount: async (password) => {
-        const response = await apiRequest('/user/account', {
+        const response = await apiRequest('/user', {
             method: 'DELETE',
             body: JSON.stringify({ password }),
         });
@@ -300,13 +267,11 @@ export const userService = {
 
     /**
      * Anderen User anzeigen (mit Follower Stats)
-     * GET /users/{userId}
      */
     getUser: async (userId) => apiRequest(`/users/${userId}`),
 
     /**
      * User suchen
-     * GET /search/users?search=...
      * Required: search (min 2, max 50 chars)
      */
     searchUsers: async (query) => apiRequest(`/search/users?search=${encodeURIComponent(query)}`),
@@ -318,49 +283,41 @@ export const userService = {
 export const followService = {
     /**
      * User folgen (oder Anfrage senden bei privaten Accounts)
-     * POST /users/{userId}/follow
      */
     follow: async (userId) => apiRequest(`/users/${userId}/follow`, { method: 'POST' }),
 
     /**
      * Entfolgen oder Anfrage zurückziehen
-     * DELETE /users/{userId}/follow
      */
     unfollow: async (userId) => apiRequest(`/users/${userId}/follow`, { method: 'DELETE' }),
 
     /**
      * Followers eines Users abrufen
-     * GET /users/{userId}/followers
      */
     getFollowers: async (userId, page = 1) => apiRequest(`/users/${userId}/followers?page=${page}`),
 
     /**
      * Following eines Users abrufen
-     * GET /users/{userId}/following
      */
     getFollowing: async (userId, page = 1) => apiRequest(`/users/${userId}/following?page=${page}`),
 
     /**
      * Follower entfernen (von eigenem Profil)
-     * DELETE /users/{userId}/follower
      */
-    removeFollower: async (userId) => apiRequest(`/users/${userId}/follower`, { method: 'DELETE' }),
+    removeFollower: async (userId) => apiRequest(`/users/${userId}/remove-follower`, { method: 'DELETE' }),
 
     /**
      * Eingehende Follow-Anfragen (für private Accounts)
-     * GET /follow-requests
      */
     getRequests: async (page = 1) => apiRequest(`/follow-requests?page=${page}`),
 
     /**
      * Follow-Anfrage annehmen
-     * POST /follow-requests/{requestId}/accept
      */
     acceptRequest: async (requestId) => apiRequest(`/follow-requests/${requestId}/accept`, { method: 'POST' }),
 
     /**
      * Follow-Anfrage ablehnen
-     * POST /follow-requests/{requestId}/decline
      */
     declineRequest: async (requestId) => apiRequest(`/follow-requests/${requestId}/decline`, { method: 'POST' }),
 };
@@ -371,19 +328,16 @@ export const followService = {
 export const blockService = {
     /**
      * Liste blockierter User
-     * GET /blocks
      */
     getBlocked: async (page = 1) => apiRequest(`/blocks?page=${page}`),
 
     /**
      * User blockieren
-     * POST /users/{userId}/block
      */
     block: async (userId) => apiRequest(`/users/${userId}/block`, { method: 'POST' }),
 
     /**
      * User entblockieren
-     * DELETE /users/{userId}/block
      */
     unblock: async (userId) => apiRequest(`/users/${userId}/block`, { method: 'DELETE' }),
 };
@@ -394,13 +348,11 @@ export const blockService = {
 export const postService = {
     /**
      * Alle Posts (paginiert)
-     * GET /posts
      */
     getPosts: async (page = 1) => apiRequest(`/posts?page=${page}`),
 
     /**
      * For You Feed - Personalisiert
-     * GET /posts/for-you?limit=&offset=
      * Optional: limit (1-20), offset
      */
     getForYou: async (limit = 5, offset = 0) =>
@@ -408,31 +360,26 @@ export const postService = {
 
     /**
      * Following Feed - Posts von gefolgten Usern
-     * GET /posts/following
      */
     getFollowing: async (page = 1) => apiRequest(`/posts/following?page=${page}`),
 
     /**
      * Friends Feed - Posts von gegenseitigen Follows
-     * GET /posts/friends
      */
     getFriends: async (page = 1) => apiRequest(`/posts/friends?page=${page}`),
 
     /**
      * Posts eines Users
-     * GET /posts/user/{userId}
      */
     getUserPosts: async (userId, page = 1) => apiRequest(`/posts/user/${userId}?page=${page}`),
 
     /**
      * Einzelnen Post anzeigen
-     * GET /posts/{postId}
      */
     getPost: async (postId) => apiRequest(`/posts/${postId}`),
 
     /**
      * Neuen Post erstellen (nur Text, ohne Bild)
-     * POST /posts
      * Required: description (max 1000)
      */
     create: async (description) => apiRequest('/posts', {
@@ -442,7 +389,7 @@ export const postService = {
 
     /**
      * Post mit Bild erstellen (FormData)
-     * POST /posts (multipart/form-data)
+     * Wenn dein Backend File Upload unterstützt
      */
     createWithImage: async (formData) => {
         const token = await AsyncStorage.getItem('authToken');
@@ -463,7 +410,6 @@ export const postService = {
 
     /**
      * Post aktualisieren
-     * PATCH /posts/{postId}
      * Optional: description, image_url
      */
     update: async (postId, data) => apiRequest(`/posts/${postId}`, {
@@ -473,13 +419,11 @@ export const postService = {
 
     /**
      * Post löschen
-     * DELETE /posts/{postId}
      */
     delete: async (postId) => apiRequest(`/posts/${postId}`, { method: 'DELETE' }),
 
     /**
      * Like/Dislike setzen
-     * POST /posts/{postId}/like
      * Required: is_like (true = like, false = dislike)
      */
     react: async (postId, is_like = true) => apiRequest(`/posts/${postId}/like`, {
@@ -489,7 +433,6 @@ export const postService = {
 
     /**
      * Like (Shortcut)
-     * POST /posts/{postId}/like { is_like: true }
      */
     like: async (postId) => apiRequest(`/posts/${postId}/like`, {
         method: 'POST',
@@ -498,7 +441,6 @@ export const postService = {
 
     /**
      * Reaction entfernen
-     * DELETE /posts/{postId}/like
      */
     unlike: async (postId) => apiRequest(`/posts/${postId}/like`, { method: 'DELETE' }),
 };
@@ -509,13 +451,11 @@ export const postService = {
 export const commentService = {
     /**
      * Comments eines Posts abrufen (mit Replies)
-     * GET /posts/{postId}/comments
      */
     getComments: async (postId, page = 1) => apiRequest(`/posts/${postId}/comments?page=${page}`),
 
     /**
      * Comment erstellen
-     * POST /posts/{postId}/comments
      * Required: body (max 500)
      * Optional: parent_id (für Replies)
      */
@@ -526,7 +466,6 @@ export const commentService = {
 
     /**
      * Comment löschen
-     * DELETE /comments/{commentId}
      */
     delete: async (commentId) => apiRequest(`/comments/${commentId}`, { method: 'DELETE' }),
 };
@@ -537,13 +476,11 @@ export const commentService = {
 export const reportService = {
     /**
      * Report-Kategorien abrufen
-     * GET /reports/categories
      */
     getCategories: async () => apiRequest('/reports/categories'),
 
     /**
      * User/Content melden
-     * POST /users/{userId}/report
      * Required: category (slug), content_type (post/comment/message/profile), content_id
      * Optional: reason (max 500)
      */
@@ -555,13 +492,11 @@ export const reportService = {
 
     /**
      * Eigene Warnings abrufen
-     * GET /user/warnings
      */
     getMyWarnings: async () => apiRequest('/user/warnings'),
 
     /**
      * Eigenen Moderations-Status abrufen
-     * GET /user/moderation-status
      */
     getMyStatus: async () => apiRequest('/user/moderation-status'),
 };
@@ -575,6 +510,11 @@ export const moderationService = {
      */
     getReports: async (status = 'pending', page = 1) =>
         apiRequest(`/admin/moderation/reports?status=${status}&page=${page}`),
+
+    /**
+     * Report anzeigen
+     */
+    getReport: async (reportId) => apiRequest(`/admin/moderation/reports/${reportId}`),
 
     /**
      * Report als gelöst markieren
@@ -609,6 +549,22 @@ export const moderationService = {
         apiRequest(`/admin/moderation/users/${userId}/unban`, {
             method: 'POST',
             body: JSON.stringify({ reason }),
+        }),
+
+    /**
+     * User zum Admin befördern
+     */
+    promoteAdmin: async (userId) =>
+        apiRequest(`/admin/moderation/users/${userId}/promote-admin`, {
+            method: 'POST',
+        }),
+
+    /**
+     * Admin-Status entziehen
+     */
+    demoteAdmin: async (userId) =>
+        apiRequest(`/admin/moderation/users/${userId}/demote-admin`, {
+            method: 'POST',
         }),
 };
 

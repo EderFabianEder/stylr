@@ -19,14 +19,9 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('home');
     const [blockedUsers, setBlockedUsers] = useState([]);
 
-    // Admin check - covers: is_admin from DB, or admin/moderate in token abilities
+    // Admin check - tokenAbilities returns 'admin:*' for admins
     const isAdmin = user?.is_admin === true || user?.is_admin === 1 ||
-        user?.abilities?.includes('admin') ||
-        user?.abilities?.includes('moderate');
-
-    // Debug: remove this once admin tab works
-    console.log('User data:', JSON.stringify(user));
-    console.log('isAdmin:', isAdmin);
+        user?.abilities?.includes('admin:*');
 
     const handleLogin = (userData) => {
         setUser(userData);

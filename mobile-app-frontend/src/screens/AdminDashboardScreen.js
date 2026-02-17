@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    View, Text, TouchableOpacity, StyleSheet, FlatList, SafeAreaView,
-    ActivityIndicator, Alert, Modal, TextInput, RefreshControl, Dimensions, Platform
+    View, Text, TouchableOpacity, StyleSheet, FlatList,
+    ActivityIndicator, Alert, Modal, TextInput, RefreshControl, Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -402,7 +402,7 @@ export default function AdminDashboardScreen({ user }) {
 
     // ─── Main Render ───
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <LinearGradient colors={['#FF5A5F', '#CE494D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.header}>
                 <View style={styles.headerContent}>
                     <User size={24} color="#fff" />
@@ -452,13 +452,13 @@ export default function AdminDashboardScreen({ user }) {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#f5f5f5' },
-    header: { paddingTop: Platform.OS === 'android' ? 40 : 10, paddingBottom: 0, paddingHorizontal: 20 },
+    header: { paddingTop: 50, paddingBottom: 0, paddingHorizontal: 20 },
     headerContent: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
     headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
     sectionTabs: { flexDirection: 'row', gap: 0 },
