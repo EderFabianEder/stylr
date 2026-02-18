@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, UserX, MoreVertical } from 'lucide-react-native';
 import { followService, userService, postService } from '../services/api';
 import PictureStatsScreen from './PictureStatsScreen';
-import FollowListScreen from './FollowListScreen';
+import FollowerListScreen from './FollowerListScreen';
 
 const { width, height } = Dimensions.get('window');
 
@@ -150,7 +150,7 @@ export default function OtherProfileScreen({ user, onBack, initialFollowing = fa
     // Show Follow List
     if (showFollowList) {
         return (
-            <FollowListScreen
+            <FollowerListScreen
                 userId={user?.id}
                 type={followListType}
                 onBack={() => { setShowFollowList(false); loadProfile(); }}
