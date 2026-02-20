@@ -6,14 +6,18 @@ import { postService } from '../services/api';
 import CommentScreen from './CommentScreen';
 import ReportScreen from './ReportScreen';
 
-export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDelete, currentUser, onBlockUser }) {
+export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onClose, onDelete, currentUser, onBlockUser, onUserPress }) {
     const [post, setPost] = useState(picture);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
-    const [isLiked, setIsLiked] = useState(picture?.user_has_liked || false);
+
+    // YouTube-style: only one can be active at a time
+    const [reaction, setReaction] = useState(null); // 'liked' | 'disliked' | null
     const [likesCount, setLikesCount] = useState(picture?.likes_count || 0);
     const [dislikesCount, setDislikesCount] = useState(picture?.dislikes_count || 0);
     const [commentsCount, setCommentsCount] = useState(picture?.comments_count || 0);
+
+    const handleBack = onBack || onClose;
 
     useEffect(() => {
         loadPostDetails();
@@ -22,53 +26,94 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
     const loadPostDetails = async () => {
         if (!picture?.id) return;
         try {
-            // GET /posts/{id}
-            // Returns: { id, user_id, description, image_url, created_at, likes_count, dislikes_count, comments_count, user: {}, comments: [] }
             const response = await postService.getPost(picture.id);
             setPost(response);
             setLikesCount(response.likes_count || 0);
             setDislikesCount(response.dislikes_count || 0);
             setCommentsCount(response.comments_count || response.comments?.length || 0);
+
+            // Set initial reaction state from API
+            if (response.user_has_liked === true) {
+                setReaction('liked');
+            } else if (response.user_has_disliked === true) {
+                setReaction('disliked');
+            } else {
+                setReaction(null);
+            }
         } catch (error) {
             console.log('Failed to load post details:', error);
         }
     };
 
     const handleLike = async () => {
-        const wasLiked = isLiked;
+        const prevReaction = reaction;
+        const prevLikes = likesCount;
+        const prevDislikes = dislikesCount;
 
-        // Optimistic update
-        setIsLiked(!wasLiked);
-        setLikesCount(prev => wasLiked ? Math.max(0, prev - 1) : prev + 1);
+        if (reaction === 'liked') {
+            // Already liked → remove like
+            setReaction(null);
+            setLikesCount(prev => Math.max(0, prev - 1));
 
-        try {
-            if (wasLiked) {
-                // DELETE /posts/{id}/like
+            try {
                 await postService.unlike(picture.id);
-            } else {
-                // POST /posts/{id}/like { is_like: true }
-                await postService.like(picture.id);
+            } catch (error) {
+                setReaction(prevReaction);
+                setLikesCount(prevLikes);
+                console.log('Failed to unlike:', error);
             }
-        } catch (error) {
-            // Revert on error
-            setIsLiked(wasLiked);
-            setLikesCount(prev => wasLiked ? prev + 1 : Math.max(0, prev - 1));
-            console.log('Failed to like:', error);
+        } else {
+            // Not liked → set like (remove dislike if active)
+            setReaction('liked');
+            setLikesCount(prev => prev + 1);
+            if (prevReaction === 'disliked') {
+                setDislikesCount(prev => Math.max(0, prev - 1));
+            }
+
+            try {
+                await postService.like(picture.id);
+            } catch (error) {
+                setReaction(prevReaction);
+                setLikesCount(prevLikes);
+                setDislikesCount(prevDislikes);
+                console.log('Failed to like:', error);
+            }
         }
     };
 
     const handleDislike = async () => {
-        // Optimistic update
-        setDislikesCount(prev => prev + 1);
+        const prevReaction = reaction;
+        const prevLikes = likesCount;
+        const prevDislikes = dislikesCount;
 
-        try {
-            // POST /posts/{id}/like { is_like: false }
-            await postService.react(picture.id, false);
-            Alert.alert('Dislike', 'Du hast diesen Post negativ bewertet');
-        } catch (error) {
-            // Revert
+        if (reaction === 'disliked') {
+            // Already disliked → remove dislike
+            setReaction(null);
             setDislikesCount(prev => Math.max(0, prev - 1));
-            console.log('Failed to dislike:', error);
+
+            try {
+                await postService.unlike(picture.id);
+            } catch (error) {
+                setReaction(prevReaction);
+                setDislikesCount(prevDislikes);
+                console.log('Failed to remove dislike:', error);
+            }
+        } else {
+            // Not disliked → set dislike (remove like if active)
+            setReaction('disliked');
+            setDislikesCount(prev => prev + 1);
+            if (prevReaction === 'liked') {
+                setLikesCount(prev => Math.max(0, prev - 1));
+            }
+
+            try {
+                await postService.react(picture.id, false);
+            } catch (error) {
+                setReaction(prevReaction);
+                setLikesCount(prevLikes);
+                setDislikesCount(prevDislikes);
+                console.log('Failed to dislike:', error);
+            }
         }
     };
 
@@ -81,10 +126,7 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
                 {
                     text: 'Löschen',
                     style: 'destructive',
-                    onPress: () => {
-                        // DELETE /posts/{id}
-                        if (onDelete) onDelete();
-                    }
+                    onPress: () => { if (onDelete) onDelete(); }
                 }
             ]
         );
@@ -94,11 +136,8 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
         if (!dateString) return '';
         const date = new Date(dateString);
         return date.toLocaleDateString('de-DE', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
         });
     };
 
@@ -108,7 +147,7 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
 
             <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                         <ArrowLeft size={24} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Post</Text>
@@ -118,11 +157,7 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
 
             <ScrollView style={styles.content}>
                 {post?.image_url ? (
-                    <Image
-                        source={{ uri: post.image_url }}
-                        style={styles.postImage}
-                        resizeMode="cover"
-                    />
+                    <Image source={{ uri: post.image_url }} style={styles.postImage} resizeMode="cover" />
                 ) : (
                     <View style={[styles.postImage, styles.noImagePlaceholder]}>
                         <Text style={styles.noImageText}>📝</Text>
@@ -132,15 +167,21 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
 
                 <View style={styles.statsContainer}>
                     <View style={styles.statRow}>
-                        <TouchableOpacity style={styles.statItem} onPress={handleLike}>
-                            <Heart size={24} color="#FF5A5F" fill={isLiked ? "#FF5A5F" : "transparent"} />
-                            <Text style={styles.statText}>{likesCount}</Text>
+                        <TouchableOpacity
+                            style={[styles.statItem, reaction === 'liked' && styles.activeStatItem]}
+                            onPress={handleLike}
+                        >
+                            <Heart size={24} color="#FF5A5F" fill={reaction === 'liked' ? "#FF5A5F" : "transparent"} />
+                            <Text style={[styles.statText, reaction === 'liked' && styles.activeStatText]}>{likesCount}</Text>
                         </TouchableOpacity>
 
                         {!isOwnPicture && (
-                            <TouchableOpacity style={styles.statItem} onPress={handleDislike}>
-                                <ThumbsDown size={24} color="#666" />
-                                <Text style={styles.statText}>{dislikesCount}</Text>
+                            <TouchableOpacity
+                                style={[styles.statItem, reaction === 'disliked' && styles.activeDislikeItem]}
+                                onPress={handleDislike}
+                            >
+                                <ThumbsDown size={24} color={reaction === 'disliked' ? "#555" : "#666"} fill={reaction === 'disliked' ? "#555" : "transparent"} />
+                                <Text style={[styles.statText, reaction === 'disliked' && styles.activeDislikeText]}>{dislikesCount}</Text>
                             </TouchableOpacity>
                         )}
 
@@ -152,7 +193,11 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
                 </View>
 
                 <View style={styles.descriptionContainer}>
-                    <View style={styles.userRow}>
+                    <TouchableOpacity
+                        style={styles.userRow}
+                        disabled={isOwnPicture || !onUserPress}
+                        onPress={() => onUserPress && post?.user && onUserPress(post.user)}
+                    >
                         <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.avatar}>
                             <Text style={styles.avatarText}>
                                 {post?.user?.name?.charAt(0).toUpperCase() || 'U'}
@@ -162,7 +207,7 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onDe
                             <Text style={styles.username}>{post?.user?.name || 'Unbekannt'}</Text>
                             <Text style={styles.timestamp}>{formatDate(post?.created_at)}</Text>
                         </View>
-                    </View>
+                    </TouchableOpacity>
                     <Text style={styles.description}>{post?.description || 'Keine Beschreibung'}</Text>
                 </View>
 
@@ -215,8 +260,12 @@ const styles = StyleSheet.create({
     noImageLabel: { fontSize: 14, color: '#888', marginTop: 10 },
     statsContainer: { backgroundColor: '#fff', padding: 15 },
     statRow: { flexDirection: 'row', justifyContent: 'space-around' },
-    statItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
+    statItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20 },
+    activeStatItem: { backgroundColor: '#fff0f0' },
+    activeDislikeItem: { backgroundColor: '#f0f0f0' },
     statText: { marginLeft: 8, fontSize: 16, color: '#333', fontWeight: '500' },
+    activeStatText: { color: '#FF5A5F', fontWeight: '700' },
+    activeDislikeText: { color: '#555', fontWeight: '700' },
     descriptionContainer: { backgroundColor: '#fff', padding: 15, marginTop: 10 },
     userRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     avatar: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
