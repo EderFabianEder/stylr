@@ -1,23 +1,15 @@
 import React, { useState, useCallback } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    StyleSheet,
-    FlatList,
-    StatusBar,
-    Pressable,
-    ActivityIndicator
+    View, Text, TextInput, TouchableOpacity, StyleSheet,
+    FlatList, StatusBar, Pressable, ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, X } from 'lucide-react-native';
-import { userService, followService } from '../services/api';
+import { userService } from '../services/api';
 import OtherProfileScreen from './OtherProfileScreen';
 
 export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUser }) {
     const [searchQuery, setSearchQuery] = useState('');
-    const [following, setFollowing] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
     const [users, setUsers] = useState([]);
@@ -25,11 +17,8 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
     const [hasSearched, setHasSearched] = useState(false);
     const [searchTimeout, setSearchTimeout] = useState(null);
 
-    // Debounced API-Suche
     const handleSearch = useCallback((text) => {
         setSearchQuery(text);
-
-        // Vorherigen Timeout löschen
         if (searchTimeout) clearTimeout(searchTimeout);
 
         if (text.trim().length < 2) {
@@ -38,7 +27,6 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
             return;
         }
 
-        // Debounce: 500ms warten bevor API-Call
         const timeout = setTimeout(async () => {
             setIsLoading(true);
             setHasSearched(true);
@@ -46,7 +34,6 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 const response = await userService.searchUsers(text.trim());
                 const results = response.data?.users || response.data?.data || [];
 
-                // Blockierte User und eigenen Account filtern
                 const filtered = results.filter(user =>
                     !blockedUsers.some(blocked => blocked.id === user.id) &&
                     user.id !== currentUser?.id
@@ -64,118 +51,48 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
         setSearchTimeout(timeout);
     }, [blockedUsers, currentUser, searchTimeout]);
 
-    const handleFollow = async (userId) => {
-        const isCurrentlyFollowing = following.includes(userId);
-
-        // Optimistic update
-        if (isCurrentlyFollowing) {
-            setFollowing(following.filter(id => id !== userId));
-        } else {
-            setFollowing([...following, userId]);
-        }
-
-        try {
-            if (isCurrentlyFollowing) {
-                await followService.unfollow(userId);
-            } else {
-                await followService.follow(userId);
-            }
-        } catch (error) {
-            // Revert bei Fehler
-            if (isCurrentlyFollowing) {
-                setFollowing(prev => [...prev, userId]);
-            } else {
-                setFollowing(prev => prev.filter(id => id !== userId));
-            }
-            console.log('Follow/Unfollow failed:', error);
-        }
-    };
-
-    const handleUserPress = (user) => {
-        setSelectedUser(user);
-        setShowProfile(true);
-    };
-
     const handleBlockUser = (user) => {
         if (onBlockUser) onBlockUser(user);
         setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
     };
 
-    const handleBackFromProfile = () => {
-        setShowProfile(false);
-        setSelectedUser(null);
-    };
-
-    // Profil-Ansicht
     if (showProfile && selectedUser) {
         return (
             <OtherProfileScreen
                 user={selectedUser}
-                onBack={handleBackFromProfile}
-                initialFollowing={following.includes(selectedUser.id)}
+                onBack={() => { setShowProfile(false); setSelectedUser(null); }}
                 onBlockUser={handleBlockUser}
                 currentUser={currentUser}
             />
         );
     }
 
-    const renderUser = ({ item }) => {
-        const isFollowing = following.includes(item.id) || item.is_following;
-
-        return (
-            <Pressable
-                onPress={() => handleUserPress(item)}
-                style={({ pressed }) => [styles.userItem, pressed && styles.userItemPressed]}
+    const renderUser = ({ item }) => (
+        <Pressable
+            onPress={() => { setSelectedUser(item); setShowProfile(true); }}
+            style={({ pressed }) => [styles.userItem, pressed && styles.userItemPressed]}
+        >
+            <LinearGradient
+                colors={['#FF5A5F', '#CE494D']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.userAvatar}
             >
-                <LinearGradient
-                    colors={['#FF5A5F', '#CE494D']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.userAvatar}
-                >
-                    <Text style={styles.userAvatarText}>
-                        {item.name?.charAt(0).toUpperCase() || 'U'}
-                    </Text>
-                </LinearGradient>
+                <Text style={styles.userAvatarText}>
+                    {item.name?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+            </LinearGradient>
 
-                <View style={styles.userInfo}>
-                    <Text style={styles.username}>{item.name}</Text>
-                    <Text style={styles.userStats}>
-                        {item.followers_count ?? 0} followers · {item.following_count ?? 0} following
-                    </Text>
-                </View>
-
-                <Pressable
-                    onPress={(e) => {
-                        e.stopPropagation();
-                        handleFollow(item.id);
-                    }}
-                    style={styles.followButtonContainer}
-                >
-                    {isFollowing ? (
-                        <View style={styles.followingButton}>
-                            <Text style={styles.followingButtonText}>Following</Text>
-                        </View>
-                    ) : (
-                        <LinearGradient
-                            colors={['#FF5A5F', '#CE494D']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.followButton}
-                        >
-                            <Text style={styles.followButtonText}>Follow</Text>
-                        </LinearGradient>
-                    )}
-                </Pressable>
-            </Pressable>
-        );
-    };
+            <View style={styles.userInfo}>
+                <Text style={styles.username}>{item.name}</Text>
+            </View>
+        </Pressable>
+    );
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            {/* Header */}
             <LinearGradient
                 colors={['#FF5A5F', '#CE494D']}
                 start={{ x: 0, y: 0 }}
@@ -187,7 +104,6 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 </View>
             </LinearGradient>
 
-            {/* Search Bar */}
             <View style={styles.searchContainer}>
                 <View style={styles.searchBar}>
                     <Search size={20} color="#666" style={styles.searchIcon} />
@@ -207,12 +123,10 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 </View>
             </View>
 
-            {/* Loading */}
             {isLoading && (
                 <ActivityIndicator size="large" color="#FF5A5F" style={{ marginTop: 30 }} />
             )}
 
-            {/* Users List */}
             {!isLoading && (
                 <FlatList
                     data={users}
@@ -249,13 +163,7 @@ const styles = StyleSheet.create({
     userAvatar: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
     userAvatarText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
     userInfo: { flex: 1 },
-    username: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-    userStats: { fontSize: 13, color: '#666' },
-    followButtonContainer: { zIndex: 10 },
-    followButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
-    followButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-    followingButton: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#e0e0e0' },
-    followingButtonText: { color: '#666', fontSize: 14, fontWeight: '600' },
+    username: { fontSize: 16, fontWeight: '600', color: '#333' },
     emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
     emptyText: { fontSize: 16, color: '#999' },
 });

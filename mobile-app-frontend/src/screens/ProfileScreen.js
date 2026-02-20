@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image, FlatList, StatusBar, Modal, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Settings, Plus, Grid, Lock } from 'lucide-react-native';
-import { postService, userService } from '../services/api';
+import { postService, userService, followService } from '../services/api';
 import AddPhotoScreen from './AddPhotoScreen';
 import PictureStatsScreen from './PictureStatsScreen';
 import EditProfileScreen from './EditProfileScreen';
@@ -17,7 +17,9 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
     const [profile, setProfile] = useState(null);
-    const [followerListMode, setFollowerListMode] = useState(null);
+    const [followersCount, setFollowersCount] = useState(0);
+    const [followingCount, setFollowingCount] = useState(0);
+    const [followerListMode, setFollowerListMode] = useState(null); // 'followers' | 'following' | null
     const [viewingUser, setViewingUser] = useState(null);
 
     useEffect(() => { loadUserData(); }, [user?.id]);
@@ -26,17 +28,20 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
         try {
             if (refresh) setIsRefreshing(true);
 
-            const [postsRes, profileRes] = await Promise.all([
+            const [postsRes, profileRes, statsRes] = await Promise.all([
                 postService.getUserPosts(user?.id),
-                userService.getProfile()
+                userService.getProfile(),
+                userService.getUser(user?.id),  // /users/{id} returns followers_count, following_count
             ]);
 
-            // GET /posts/user/{userId} returns: { success, data: { current_page, data: [...], per_page, total } }
             const postsData = postsRes.data?.data || postsRes.data || [];
             const profileData = profileRes.data?.user || profileRes.data || profileRes;
+            const statsData = statsRes.data || {};
 
             setPosts(postsData);
             setProfile(profileData);
+            setFollowersCount(statsData.followers_count || 0);
+            setFollowingCount(statsData.following_count || 0);
         } catch (error) {
             console.log('Failed to load profile:', error);
         } finally {
@@ -54,7 +59,6 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
             let response;
 
             if (photoData.imageUri) {
-                // Upload image as file via FormData
                 const formData = new FormData();
                 formData.append('description', photoData.description);
                 formData.append('image', {
@@ -64,24 +68,15 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
                 });
                 response = await postService.createWithImage(formData);
             } else {
-                // Text-only post
                 response = await postService.create(photoData.description);
             }
 
             console.log('Post created:', response);
-
-            // Close modal first
             setShowAddPhoto(false);
-
-            // Reload posts
             loadUserData(true);
-
-            // Show success
             Alert.alert('Erfolg', 'Post wurde erstellt!');
-
         } catch (error) {
             console.log('Failed to create post:', error);
-            // Re-throw so AddPhotoScreen can show error
             throw error;
         }
     };
@@ -94,7 +89,6 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        // DELETE /posts/{id}
                         await postService.delete(postId);
                         setPosts(prev => prev.filter(p => p.id !== postId));
                         setSelectedPost(null);
@@ -136,6 +130,37 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
         </TouchableOpacity>
     );
 
+    // ---- Sub-screen navigation ----
+
+    // Viewing another user's profile (from follower list)
+    if (viewingUser) {
+        return (
+            <OtherProfileScreen
+                user={viewingUser}
+                onBack={() => { setViewingUser(null); loadUserData(true); }}
+                currentUser={user}
+            />
+        );
+    }
+
+    // Follower / Following list
+    if (followerListMode) {
+        return (
+            <FollowerListScreen
+                userId={user?.id}
+                mode={followerListMode}
+                onBack={() => { setFollowerListMode(null); loadUserData(true); }}
+                onUserPress={(u) => {
+                    if (u.id !== user?.id) {
+                        setFollowerListMode(null);
+                        setViewingUser(u);
+                    }
+                }}
+            />
+        );
+    }
+
+    // Post detail
     if (selectedPost) {
         return (
             <PictureStatsScreen
@@ -144,34 +169,6 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
                 onBack={() => setSelectedPost(null)}
                 onDelete={() => handleDeletePost(selectedPost.id)}
                 currentUser={user}
-            />
-        );
-    }
-
-    // Show other user profile when tapped from follower list
-    if (viewingUser) {
-        return (
-            <OtherProfileScreen
-                user={viewingUser}
-                onBack={() => setViewingUser(null)}
-                currentUser={user}
-            />
-        );
-    }
-
-    // Show follower/following list
-    if (followerListMode) {
-        return (
-            <FollowerListScreen
-                userId={user?.id}
-                mode={followerListMode}
-                onBack={() => setFollowerListMode(null)}
-                onUserPress={(u) => {
-                    setFollowerListMode(null);
-                    if (u.id !== user?.id) {
-                        setViewingUser(u);
-                    }
-                }}
             />
         );
     }
@@ -209,11 +206,11 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
                             <Text style={styles.statLabel}>Posts</Text>
                         </View>
                         <TouchableOpacity style={styles.statItem} onPress={() => setFollowerListMode('followers')}>
-                            <Text style={styles.statNumber}>{displayUser?.followers_count || 0}</Text>
+                            <Text style={styles.statNumber}>{followersCount}</Text>
                             <Text style={styles.statLabel}>Follower</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.statItem} onPress={() => setFollowerListMode('following')}>
-                            <Text style={styles.statNumber}>{displayUser?.following_count || 0}</Text>
+                            <Text style={styles.statNumber}>{followingCount}</Text>
                             <Text style={styles.statLabel}>Folge ich</Text>
                         </TouchableOpacity>
                     </View>

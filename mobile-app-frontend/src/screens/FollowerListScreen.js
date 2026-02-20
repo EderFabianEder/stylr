@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft } from 'lucide-react-native';
 import { followService } from '../services/api';
 
-export default function FollowerListScreen({ userId, mode, onBack, onUserPress, title }) {
+export default function FollowerListScreen({ userId, mode, onBack, onUserPress }) {
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -40,7 +40,7 @@ export default function FollowerListScreen({ userId, mode, onBack, onUserPress, 
                 setUsers(prev => [...prev, ...list]);
             }
 
-            setHasMore(pagination.current_page < pagination.last_page);
+            setHasMore((pagination.current_page || 1) < (pagination.last_page || 1));
             setPage(currentPage + 1);
         } catch (error) {
             console.log('Failed to load users:', error);
@@ -86,7 +86,7 @@ export default function FollowerListScreen({ userId, mode, onBack, onUserPress, 
                         <ArrowLeft size={24} color="#fff" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>
-                        {title || (mode === 'followers' ? 'Follower' : 'Folge ich')}
+                        {mode === 'followers' ? 'Follower' : 'Folge ich'}
                     </Text>
                     <View style={{ width: 40 }} />
                 </View>
