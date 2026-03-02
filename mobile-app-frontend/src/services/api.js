@@ -33,27 +33,33 @@ const apiRequest = async (endpoint, options = {}) => {
         ...options.headers,
     };
 
-    // Remove Content-Type for FormData
-    if (options.body instanceof FormData) {
-        delete headers['Content-Type'];
-    }
-
     try {
-        const response = await fetch(url, { ...options, headers });
+        const response = await fetch(url, {
+            ...options,
+            headers,
+        });
+
         const data = await response.json();
 
         if (!response.ok) {
-            throw {
+            const error = {
                 status: response.status,
-                message: data.message || 'Ein Fehler ist aufgetreten',
-                errors: data.errors || {},
-                data: data.data || null
+                message: data.message || `HTTP ${response.status}`,
+                errors: data.errors || null,
             };
+            throw error;
         }
+
         return data;
     } catch (error) {
-        if (error.status) throw error;
-        throw { status: 0, message: 'Netzwerkfehler - Bitte Verbindung prüfen', errors: {} };
+        if (error.status) {
+            throw error;
+        }
+        throw {
+            status: 0,
+            message: 'Netzwerkfehler - Bitte prüfe deine Internetverbindung',
+            errors: null,
+        };
     }
 };
 
@@ -139,7 +145,7 @@ export const authService = {
     },
 
     /**
-     * Aktueller User
+     * Aktueller User (mit Token-Info)
      */
     getUser: async () => apiRequest('/auth/user'),
 
@@ -173,8 +179,9 @@ export const authService = {
 
     /**
      * Email Verifizierung erneut senden
+     * FIX: /auth/email/resend → /email/verification-notification
      */
-    resendVerification: async () => apiRequest('/auth/email/resend', { method: 'POST' }),
+    resendVerification: async () => apiRequest('/email/verification-notification', { method: 'POST' }),
 
     /**
      * Check ob eingeloggt
@@ -187,13 +194,14 @@ export const authService = {
 
 // ============================================
 // TWO FACTOR SERVICE
+// FIX: /auth/two-factor/... → /two-factor/...
 // ============================================
 export const twoFactorService = {
     /**
      * 2FA aktivieren
      * Required: password
      */
-    enable: async (password) => apiRequest('/auth/two-factor/enable', {
+    enable: async (password) => apiRequest('/two-factor/enable', {
         method: 'POST',
         body: JSON.stringify({ password }),
     }),
@@ -201,13 +209,13 @@ export const twoFactorService = {
     /**
      * QR Code abrufen
      */
-    getQR: async () => apiRequest('/auth/two-factor/qr'),
+    getQR: async () => apiRequest('/two-factor/qr'),
 
     /**
      * 2FA bestätigen
      * Required: code (6 digits)
      */
-    confirm: async (code) => apiRequest('/auth/two-factor/confirm', {
+    confirm: async (code) => apiRequest('/two-factor/confirm', {
         method: 'POST',
         body: JSON.stringify({ code }),
     }),
@@ -216,7 +224,7 @@ export const twoFactorService = {
      * 2FA deaktivieren
      * Required: password
      */
-    disable: async (password) => apiRequest('/auth/two-factor/disable', {
+    disable: async (password) => apiRequest('/two-factor/disable', {
         method: 'POST',
         body: JSON.stringify({ password }),
     }),
@@ -224,16 +232,20 @@ export const twoFactorService = {
 
 // ============================================
 // USER SERVICE
+// FIX: /user → /user/profile (GET + PATCH)
+// FIX: /user DELETE → /user/account
 // ============================================
 export const userService = {
     /**
      * Eigenes Profil anzeigen
+     * FIX: /user → /user/profile
      */
     getProfile: async () => apiRequest('/user/profile'),
 
     /**
      * Profil aktualisieren
-     * Optional: name, email, account_type (public/private)
+     * Optional: name, email, account_type (public/private), description (max 150)
+     * FIX: /user → /user/profile
      */
     updateProfile: async (data) => apiRequest('/user/profile', {
         method: 'PATCH',
@@ -254,6 +266,7 @@ export const userService = {
     /**
      * Account löschen
      * Required: password
+     * FIX: /user DELETE → /user/account
      */
     deleteAccount: async (password) => {
         const response = await apiRequest('/user/account', {
@@ -264,6 +277,31 @@ export const userService = {
         await AsyncStorage.removeItem('authToken');
         return response;
     },
+
+    /**
+     * Profilbild hochladen (FormData mit profile_picture)
+     */
+    updateProfilePicture: async (formData) => {
+        const token = await AsyncStorage.getItem('authToken');
+        const response = await fetch(`${API_URL}/user/profile-picture`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json',
+            },
+            body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw { status: response.status, message: data.message, errors: data.errors };
+        }
+        return data;
+    },
+
+    /**
+     * Profilbild löschen
+     */
+    deleteProfilePicture: async () => apiRequest('/user/profile-picture', { method: 'DELETE' }),
 
     /**
      * Anderen User anzeigen (mit Follower Stats)
@@ -303,6 +341,7 @@ export const followService = {
 
     /**
      * Follower entfernen (von eigenem Profil)
+     * FIX: /users/{id}/remove-follower → /users/{id}/follower
      */
     removeFollower: async (userId) => apiRequest(`/users/${userId}/follower`, { method: 'DELETE' }),
 
@@ -389,7 +428,6 @@ export const postService = {
 
     /**
      * Post mit Bild erstellen (FormData)
-     * Wenn dein Backend File Upload unterstützt
      */
     createWithImage: async (formData) => {
         const token = await AsyncStorage.getItem('authToken');
@@ -475,13 +513,14 @@ export const commentService = {
 // ============================================
 export const reportService = {
     /**
-     * Report-Kategorien abrufen
+     * Report-Kategorien abrufen (öffentlich, kein Auth nötig)
+     * Gibt Array zurück: [{name, slug, description, threshold, points, priority}]
      */
     getCategories: async () => apiRequest('/reports/categories'),
 
     /**
      * User/Content melden
-     * Required: category (slug), content_type (post/comment/message/profile), content_id
+     * Required: category (slug z.B. "spam"), content_type (post/comment/message/profile), content_id
      * Optional: reason (max 500)
      */
     report: async (userId, category, content_type, content_id, reason = null) =>
@@ -506,15 +545,10 @@ export const reportService = {
 // ============================================
 export const moderationService = {
     /**
-     * Alle offenen Reports
+     * Alle Reports (paginiert, filterbar)
      */
     getReports: async (status = 'pending', page = 1) =>
         apiRequest(`/admin/moderation/reports?status=${status}&page=${page}`),
-
-    /**
-     * Report anzeigen
-     */
-    getReport: async (reportId) => apiRequest(`/admin/moderation/reports/${reportId}`),
 
     /**
      * Report als gelöst markieren
@@ -553,19 +587,17 @@ export const moderationService = {
 
     /**
      * User zum Admin befördern
+     * NEU: Route existierte im Backend, fehlte im Frontend
      */
     promoteAdmin: async (userId) =>
-        apiRequest(`/admin/moderation/users/${userId}/promote-admin`, {
-            method: 'POST',
-        }),
+        apiRequest(`/admin/moderation/users/${userId}/promote-admin`, { method: 'POST' }),
 
     /**
-     * Admin-Status entziehen
+     * Admin-Rechte entziehen
+     * NEU: Route existierte im Backend, fehlte im Frontend
      */
     demoteAdmin: async (userId) =>
-        apiRequest(`/admin/moderation/users/${userId}/demote-admin`, {
-            method: 'POST',
-        }),
+        apiRequest(`/admin/moderation/users/${userId}/demote-admin`, { method: 'POST' }),
 };
 
 // Default Export
