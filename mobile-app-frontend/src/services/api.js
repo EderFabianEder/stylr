@@ -46,6 +46,7 @@ const apiRequest = async (endpoint, options = {}) => {
                 status: response.status,
                 message: data.message || `HTTP ${response.status}`,
                 errors: data.errors || null,
+                data: data.data || null,
             };
             throw error;
         }

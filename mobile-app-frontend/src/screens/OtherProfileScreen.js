@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, UserX, MoreVertical, Grid, Lock } from 'lucide-react-native';
-import { userService, followService, postService } from '../services/api';
+import { userService, followService, postService, blockService } from '../services/api';
 import PictureStatsScreen from './PictureStatsScreen';
 import FollowerListScreen from './FollowerListScreen';
 
@@ -76,10 +76,15 @@ export default function OtherProfileScreen({ user, onBack, onBlockUser, currentU
         }
     };
 
-    const handleBlockUser = () => {
+    const handleBlockUser = async () => {
         setShowBlockModal(false);
-        if (onBlockUser) onBlockUser(user);
-        onBack();
+        try {
+            await blockService.block(userId);
+            if (onBlockUser) onBlockUser(user);
+            onBack();
+        } catch (error) {
+            Alert.alert('Fehler', error.message || 'User konnte nicht blockiert werden');
+        }
     };
 
     const getFollowButtonText = () => {

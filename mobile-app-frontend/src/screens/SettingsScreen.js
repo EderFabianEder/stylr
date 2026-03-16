@@ -60,7 +60,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
         setIsLoadingBlocked(true);
         try {
             const response = await blockService.getBlocked();
-            const blocked = response.data?.data || response.data || [];
+            const blocked = response.data?.blocked_users || response.data?.data || [];
             setApiBlockedUsers(blocked);
         } catch (error) {
             console.log('Failed to load blocked users:', error);
@@ -119,6 +119,11 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
 
     const handleLogout = async () => {
         setShowLogoutConfirm(false);
+        try {
+            await authService.logout();
+        } catch (error) {
+            console.log('Logout API error (continuing):', error);
+        }
         if (onLogout) onLogout();
     };
 

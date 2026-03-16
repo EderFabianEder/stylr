@@ -102,17 +102,11 @@ export default function ProfileScreen({ user, onUpdateUser, onLogout, refreshUse
     };
 
     const handleUpdateProfile = async (data) => {
-        try {
-            await userService.updateProfile(data);
-            if (onUpdateUser) onUpdateUser(data);
-            if (refreshUser) refreshUser();
-            loadUserData(true);
-            setShowEditProfile(false);
-            Alert.alert('Erfolg', 'Profil wurde aktualisiert');
-        } catch (error) {
-            Alert.alert('Fehler', error.message || 'Profil konnte nicht aktualisiert werden');
-            throw error;
-        }
+        // Note: EditProfileScreen already calls userService.updateProfile() — no need to call it again here
+        if (onUpdateUser) onUpdateUser(data);
+        if (refreshUser) refreshUser();
+        loadUserData(true);
+        setShowEditProfile(false);
     };
 
     const renderPost = ({ item }) => (

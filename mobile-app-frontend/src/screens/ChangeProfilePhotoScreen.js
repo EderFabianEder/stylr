@@ -24,7 +24,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (status !== 'granted') {
-            alert('Sorry, we need camera roll permissions to change your profile photo!');
+            alert('Bitte erlaube den Zugriff auf deine Fotos, um dein Profilbild zu ändern.');
             return;
         }
 
@@ -46,7 +46,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
         if (status !== 'granted') {
-            alert('Sorry, we need camera permissions to take a photo!');
+            alert('Bitte erlaube den Zugriff auf die Kamera, um ein Foto aufzunehmen.');
             return;
         }
 
@@ -91,7 +91,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
                 >
                     <ArrowLeft size={24} color="white" strokeWidth={2.5} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Change Photo</Text>
+                <Text style={styles.headerTitle}>Foto ändern</Text>
                 <View style={styles.headerSpacer} />
             </LinearGradient>
 
@@ -102,7 +102,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
             >
                 {/* Current Photo Preview */}
                 <View style={styles.previewSection}>
-                    <Text style={styles.sectionTitle}>Current Photo</Text>
+                    <Text style={styles.sectionTitle}>Aktuelles Foto</Text>
                     <View style={styles.photoPreviewContainer}>
                         {selectedPhoto ? (
                             <Image
@@ -119,7 +119,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
 
                 {/* Action Buttons */}
                 <View style={styles.actionsSection}>
-                    <Text style={styles.sectionTitle}>Choose Action</Text>
+                    <Text style={styles.sectionTitle}>Aktion wählen</Text>
 
                     {/* Take Photo Button */}
                     <TouchableOpacity
@@ -131,8 +131,8 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
                             <Camera size={24} color="#FF5A5F" strokeWidth={2} />
                         </View>
                         <View style={styles.actionTextContainer}>
-                            <Text style={styles.actionTitle}>Take Photo</Text>
-                            <Text style={styles.actionSubtitle}>Use your camera</Text>
+                            <Text style={styles.actionTitle}>Foto aufnehmen</Text>
+                            <Text style={styles.actionSubtitle}>Kamera verwenden</Text>
                         </View>
                     </TouchableOpacity>
 
@@ -146,8 +146,8 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
                             <ImageIcon size={24} color="#FF5A5F" strokeWidth={2} />
                         </View>
                         <View style={styles.actionTextContainer}>
-                            <Text style={styles.actionTitle}>Choose from Gallery</Text>
-                            <Text style={styles.actionSubtitle}>Select from your photos</Text>
+                            <Text style={styles.actionTitle}>Aus Galerie wählen</Text>
+                            <Text style={styles.actionSubtitle}>Aus deinen Fotos auswählen</Text>
                         </View>
                     </TouchableOpacity>
 
@@ -162,8 +162,8 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
                                 <Trash2 size={24} color="#E74C3C" strokeWidth={2} />
                             </View>
                             <View style={styles.actionTextContainer}>
-                                <Text style={[styles.actionTitle, styles.dangerText]}>Remove Photo</Text>
-                                <Text style={styles.actionSubtitle}>Use default placeholder</Text>
+                                <Text style={[styles.actionTitle, styles.dangerText]}>Foto entfernen</Text>
+                                <Text style={styles.actionSubtitle}>Standard-Platzhalter verwenden</Text>
                             </View>
                         </TouchableOpacity>
                     )}
@@ -181,7 +181,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                     >
-                        <Text style={styles.saveButtonText}>Save Photo</Text>
+                        <Text style={styles.saveButtonText}>Foto speichern</Text>
                     </LinearGradient>
                 </TouchableOpacity>
             </ScrollView>
