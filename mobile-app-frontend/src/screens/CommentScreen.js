@@ -39,16 +39,31 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
             if (pageNum === 1) setIsLoading(true);
 
             const response = await commentService.getComments(post.id, pageNum);
-            const commentsData = response.data?.data || response.data || [];
+
+            // Backend kann unterschiedliche Shapes liefern:
+            // - Laravel Paginator roh:  { current_page, data: [...], last_page, ... }
+            // - Wrapped:                { success, data: { current_page, data: [...], last_page, ... } }
+            // - Comments-Key:           { success, data: { comments: [...], pagination: { last_page } } }
+            // - Roher Array:            [...]
+            const commentsArray =
+                Array.isArray(response) ? response :
+                Array.isArray(response?.data?.data) ? response.data.data :
+                Array.isArray(response?.data?.comments) ? response.data.comments :
+                Array.isArray(response?.data) ? response.data :
+                [];
+
+            const lastPage =
+                response?.data?.pagination?.last_page ||
+                response?.data?.last_page ||
+                response?.last_page ||
+                1;
 
             if (pageNum === 1) {
-                setComments(commentsData);
+                setComments(commentsArray);
             } else {
-                setComments(prev => [...prev, ...commentsData]);
+                setComments(prev => [...(Array.isArray(prev) ? prev : []), ...commentsArray]);
             }
 
-            // Pagination
-            const lastPage = response.data?.last_page || 1;
             setHasMore(pageNum < lastPage);
             setPage(pageNum);
         } catch (error) {
@@ -74,27 +89,32 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
             let commentText = newComment.trim();
 
             const response = await commentService.create(post.id, commentText, parentId);
-            const newCommentData = response.data || response;
+            // Backend kann wrappen ({success, data: {...}}) oder roh liefern
+            const newCommentData =
+                (response?.data && !Array.isArray(response.data) && response.data.id)
+                    ? response.data
+                    : response;
 
             if (replyingTo) {
                 // Reply zu bestehendem Comment hinzufügen
-                setComments(prevComments =>
-                    prevComments.map(comment => {
+                setComments(prevComments => {
+                    const list = Array.isArray(prevComments) ? prevComments : [];
+                    return list.map(comment => {
                         if (comment.id === replyingTo.id) {
                             return {
                                 ...comment,
-                                replies: [...(comment.replies || []), newCommentData],
+                                replies: [...(Array.isArray(comment.replies) ? comment.replies : []), newCommentData],
                                 replies_count: (comment.replies_count || 0) + 1
                             };
                         }
                         return comment;
-                    })
-                );
+                    });
+                });
                 setExpandedReplies(prev => ({ ...prev, [replyingTo.id]: true }));
                 setReplyingTo(null);
             } else {
                 // Neuen Comment oben einfügen
-                setComments(prev => [newCommentData, ...prev]);
+                setComments(prev => [newCommentData, ...(Array.isArray(prev) ? prev : [])]);
             }
 
             setNewComment('');
