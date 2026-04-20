@@ -26,6 +26,7 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
     const [replyingTo, setReplyingTo] = useState(null);
     const [expandedReplies, setExpandedReplies] = useState({});
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
@@ -36,7 +37,7 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
 
     const loadComments = async (pageNum = 1) => {
         try {
-            if (pageNum === 1) setIsLoading(true);
+            if (pageNum === 1) setIsLoading(true); else setIsLoadingMore(true);
 
             const response = await commentService.getComments(post.id, pageNum);
             const commentsData = response.data?.data || response.data || [];
@@ -55,11 +56,12 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
             console.log('Failed to load comments:', error);
         } finally {
             setIsLoading(false);
+            setIsLoadingMore(false);
         }
     };
 
     const loadMore = () => {
-        if (hasMore && !isLoading) {
+        if (hasMore && !isLoading && !isLoadingMore) {
             loadComments(page + 1);
         }
     };
@@ -155,15 +157,15 @@ export default function CommentScreen({ post, onClose, currentUser, onBlockUser 
     };
 
     const handleUserPress = (commentUser) => {
-        const userId = commentUser.user_id || commentUser.id;
-        if (userId === currentUser?.id) return;
+        const userId = commentUser.user_id || commentUser.user?.id || commentUser.id;
+        if (!userId || userId === currentUser?.id) return;
 
         const userProfile = {
             id: userId,
             name: commentUser.user?.name || commentUser.name || commentUser.username,
-            username: commentUser.user?.name || commentUser.name || commentUser.username,
-            followers_count: commentUser.followers_count || 0,
-            following_count: commentUser.following_count || 0,
+            username: commentUser.user?.username || commentUser.username || commentUser.user?.name || commentUser.name,
+            followers_count: commentUser.user?.followers_count || commentUser.followers_count || 0,
+            following_count: commentUser.user?.following_count || commentUser.following_count || 0,
         };
         setSelectedUser(userProfile);
         setShowUserProfile(true);

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Home, User, Settings, Lock } from 'lucide-react-native';
+import { authService } from './src/services/api';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -49,9 +50,15 @@ export default function App() {
         setBlockedUsers(prev => prev.filter(u => u.id !== userId));
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        try {
+            await authService.logout();
+        } catch (e) {
+            // Even if logout API fails, clear local state
+        }
         setIsAuthenticated(false);
         setUser(null);
+        setBlockedUsers([]);
         setCurrentScreen('login');
         setActiveTab('home');
     };
@@ -67,11 +74,11 @@ export default function App() {
 
     // Define tabs - conditionally include admin
     const tabs = [
-        { key: 'profile', icon: User, label: 'Profile' },
+        { key: 'profile', icon: User, label: 'Profil' },
         { key: 'home', icon: Home, label: 'Home' },
-        { key: 'search', icon: Search, label: 'Search' },
+        { key: 'search', icon: Search, label: 'Suche' },
         ...(isAdmin ? [{ key: 'admin', icon: Lock, label: 'Admin' }] : []),
-        { key: 'settings', icon: Settings, label: 'Settings' },
+        { key: 'settings', icon: Settings, label: 'Einstellungen' },
     ];
 
     // Main App Content

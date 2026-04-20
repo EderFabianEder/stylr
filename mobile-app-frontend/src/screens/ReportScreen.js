@@ -180,9 +180,9 @@ export default function ReportScreen({ targetUser, contentType, contentId, onClo
                 )}
 
                 {/* Kategorien-Liste */}
-                {!isLoadingCategories && !error && categories.map((category) => (
+                {!isLoadingCategories && !error && categories.map((category, index) => (
                     <TouchableOpacity
-                        key={category.slug}
+                        key={category.slug || category.id || `cat-${index}`}
                         style={[
                             styles.reasonItem,
                             selectedCategory?.slug === category.slug && styles.reasonItemSelected,

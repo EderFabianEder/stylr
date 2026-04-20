@@ -27,15 +27,18 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onCl
         if (!picture?.id) return;
         try {
             const response = await postService.getPost(picture.id);
-            setPost(response);
-            setLikesCount(response.likes_count || 0);
-            setDislikesCount(response.dislikes_count || 0);
-            setCommentsCount(response.comments_count || response.comments?.length || 0);
+            // getPost returns raw model, but handle wrapped shape defensively
+            const postData = response?.data || response;
+            if (!postData) return;
+            setPost(postData);
+            setLikesCount(postData.likes_count || 0);
+            setDislikesCount(postData.dislikes_count || 0);
+            setCommentsCount(postData.comments_count || postData.comments?.length || 0);
 
             // Set initial reaction state from API
-            if (response.user_has_liked === true) {
+            if (postData.user_has_liked === true) {
                 setReaction('liked');
-            } else if (response.user_has_disliked === true) {
+            } else if (postData.user_has_disliked === true) {
                 setReaction('disliked');
             } else {
                 setReaction(null);

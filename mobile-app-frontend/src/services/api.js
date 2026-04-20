@@ -33,34 +33,43 @@ const apiRequest = async (endpoint, options = {}) => {
         ...options.headers,
     };
 
+    let response;
     try {
-        const response = await fetch(url, {
+        response = await fetch(url, {
             ...options,
             headers,
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            const error = {
-                status: response.status,
-                message: data.message || `HTTP ${response.status}`,
-                errors: data.errors || null,
-            };
-            throw error;
-        }
-
-        return data;
-    } catch (error) {
-        if (error.status) {
-            throw error;
-        }
+    } catch (networkError) {
         throw {
             status: 0,
             message: 'Netzwerkfehler - Bitte prüfe deine Internetverbindung',
             errors: null,
+            data: null,
         };
     }
+
+    let data = null;
+    try {
+        data = await response.json();
+    } catch (parseError) {
+        data = null;
+    }
+
+    if (!response.ok) {
+        // Auto-clear invalidated tokens
+        if (response.status === 401) {
+            authToken = null;
+            try { await AsyncStorage.removeItem('authToken'); } catch (e) {}
+        }
+        throw {
+            status: response.status,
+            message: data?.message || `HTTP ${response.status}`,
+            errors: data?.errors || null,
+            data: data || null,
+        };
+    }
+
+    return data;
 };
 
 // ============================================
@@ -291,9 +300,9 @@ export const userService = {
             },
             body: formData,
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw { status: response.status, message: data.message, errors: data.errors };
+            throw { status: response.status, message: data.message, errors: data.errors, data };
         }
         return data;
     },
@@ -439,9 +448,9 @@ export const postService = {
             },
             body: formData,
         });
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw { status: response.status, message: data.message, errors: data.errors };
+            throw { status: response.status, message: data.message, errors: data.errors, data };
         }
         return data;
     },

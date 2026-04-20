@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
     FlatList, StatusBar, Pressable, ActivityIndicator
@@ -15,11 +15,15 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [hasSearched, setHasSearched] = useState(false);
-    const [searchTimeout, setSearchTimeout] = useState(null);
+    const searchTimeoutRef = useRef(null);
+
+    useEffect(() => () => {
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    }, []);
 
     const handleSearch = useCallback((text) => {
         setSearchQuery(text);
-        if (searchTimeout) clearTimeout(searchTimeout);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
         if (text.trim().length < 2) {
             setUsers([]);
@@ -27,7 +31,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
             return;
         }
 
-        const timeout = setTimeout(async () => {
+        searchTimeoutRef.current = setTimeout(async () => {
             setIsLoading(true);
             setHasSearched(true);
             try {
@@ -47,9 +51,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 setIsLoading(false);
             }
         }, 500);
-
-        setSearchTimeout(timeout);
-    }, [blockedUsers, currentUser, searchTimeout]);
+    }, [blockedUsers, currentUser?.id]);
 
     const handleBlockUser = (user) => {
         if (onBlockUser) onBlockUser(user);
@@ -131,7 +133,7 @@ export default function SearchScreen({ blockedUsers = [], onBlockUser, currentUs
                 <FlatList
                     data={users}
                     renderItem={renderUser}
-                    keyExtractor={(item) => item.id.toString()}
+                    keyExtractor={(item) => item.id?.toString() ?? String(Math.random())}
                     contentContainerStyle={styles.usersList}
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>

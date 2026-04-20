@@ -98,7 +98,7 @@ export default function FollowerListScreen({ userId, mode, onBack, onUserPress }
                 <FlatList
                     data={users}
                     renderItem={renderUser}
-                    keyExtractor={(item) => item.id.toString()}
+                    keyExtractor={(item) => item.id?.toString() ?? String(Math.random())}
                     contentContainerStyle={styles.list}
                     onEndReached={() => hasMore && !isLoadingMore && loadUsers(false)}
                     onEndReachedThreshold={0.3}

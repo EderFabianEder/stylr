@@ -28,10 +28,12 @@ export default function EditProfileScreen({ user, onSave, onBack, onClose }) {
     const [showChangePhotoScreen, setShowChangePhotoScreen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [newPhotoUri, setNewPhotoUri] = useState(null); // Lokal gewähltes Foto
+    const [photoRemoved, setPhotoRemoved] = useState(false); // User hat vorhandenes Foto entfernt
 
     const handlePhotoSave = (photoUri) => {
         setNewPhotoUri(photoUri);
         setProfilePhoto(photoUri);
+        setPhotoRemoved(photoUri === null && !!(user?.profile_photo_url || user?.profilePhoto));
         setShowChangePhotoScreen(false);
     };
 
@@ -59,7 +61,7 @@ export default function EditProfileScreen({ user, onSave, onBack, onClose }) {
                     name: 'profile.jpg',
                 });
                 await userService.updateProfilePicture(formData);
-            } else if (newPhotoUri === null && !profilePhoto) {
+            } else if (photoRemoved) {
                 // Profilbild wurde entfernt
                 try {
                     await userService.deleteProfilePicture();

@@ -33,7 +33,6 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
                 ...(response.data?.user || response.data),
                 abilities: response.data?.abilities || [],
             };
-            console.log('Login userData:', JSON.stringify(userData));
             onLogin(userData);
 
         } catch (error) {
@@ -54,6 +53,7 @@ export default function LoginScreen({ onLogin, onNavigateToRegister }) {
             // Validation errors
             if (error.errors) {
                 setErrors(error.errors);
+                return;
             }
 
             // Remaining attempts

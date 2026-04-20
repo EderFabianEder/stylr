@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, TouchableOpacity, StyleSheet, FlatList,
     ActivityIndicator, Alert, Modal, TextInput, RefreshControl, Dimensions
@@ -36,7 +36,11 @@ export default function AdminDashboardScreen({ user }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [searchTimer, setSearchTimer] = useState(null);
+    const searchTimerRef = useRef(null);
+
+    useEffect(() => () => {
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    }, []);
 
     useEffect(() => {
         if (activeSection === 'reports') {
@@ -157,14 +161,14 @@ export default function AdminDashboardScreen({ user }) {
     // User Search (same logic as SearchScreen)
     const handleSearch = useCallback((text) => {
         setSearchQuery(text);
-        if (searchTimer) clearTimeout(searchTimer);
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
         if (text.trim().length < 2) {
             setSearchResults([]);
             return;
         }
 
-        const timer = setTimeout(async () => {
+        searchTimerRef.current = setTimeout(async () => {
             setIsSearching(true);
             try {
                 const response = await userService.searchUsers(text.trim());
@@ -175,8 +179,7 @@ export default function AdminDashboardScreen({ user }) {
                 setSearchResults([]);
             } finally { setIsSearching(false); }
         }, 500);
-        setSearchTimer(timer);
-    }, [searchTimer]);
+    }, []);
 
     // Admin Promote/Demote
     const handlePromote = async (targetUser) => {
@@ -392,7 +395,7 @@ export default function AdminDashboardScreen({ user }) {
                 <View style={styles.emptyContainer}>
                     <Search size={48} color="#ccc" />
                     <Text style={styles.emptyTitle}>Keine Ergebnisse</Text>
-                    <Text style={styles.emptySubtitle}>Kein User mit "{searchQuery}" gefunden.</Text>
+                    <Text style={styles.emptySubtitle}>Kein User mit „{searchQuery}“ gefunden.</Text>
                 </View>
             ) : (
                 <FlatList data={searchResults} renderItem={renderUserCard} keyExtractor={item => item.id?.toString()} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} />

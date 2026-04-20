@@ -69,13 +69,12 @@ export default function HomeScreen({ user, onBlockUser }) {
         // Remove current post so it doesn't repeat
         setPosts(prev => {
             const updated = prev.filter((_, idx) => idx !== currentIndex);
+            // If we're running low on posts, load more (check against the updated length)
+            if (updated.length <= 4 && hasMore && !isLoadingMore) {
+                loadPosts(false);
+            }
             return updated;
         });
-
-        // If we're running low on posts, load more
-        if (posts.length <= 4 && hasMore && !isLoadingMore) {
-            loadPosts(false);
-        }
     };
 
     const handleLike = async () => {

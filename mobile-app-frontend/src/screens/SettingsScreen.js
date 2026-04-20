@@ -28,6 +28,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     // Blocked users aus API
     const [apiBlockedUsers, setApiBlockedUsers] = useState([]);
     const [isLoadingBlocked, setIsLoadingBlocked] = useState(false);
+    const [hasLoadedBlocked, setHasLoadedBlocked] = useState(false);
 
     // Modals
     const [showChangePassword, setShowChangePassword] = useState(false);
@@ -62,6 +63,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
             const response = await blockService.getBlocked();
             const blocked = response.data?.data || response.data || [];
             setApiBlockedUsers(blocked);
+            setHasLoadedBlocked(true);
         } catch (error) {
             console.log('Failed to load blocked users:', error);
         } finally {
@@ -375,8 +377,8 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
         </Modal>
     );
 
-    // Blocked Users Modal
-    const displayBlockedUsers = apiBlockedUsers.length > 0 ? apiBlockedUsers : blockedUsers;
+    // Blocked Users Modal - prefer API data once loaded (empty is valid)
+    const displayBlockedUsers = hasLoadedBlocked ? apiBlockedUsers : blockedUsers;
 
     const BlockedUsersModal = () => (
         <Modal visible={showBlockedUsers} transparent={true} animationType="slide" onRequestClose={() => setShowBlockedUsers(false)}>

@@ -15,6 +15,7 @@ export default function OtherProfileScreen({ user, onBack, onBlockUser, currentU
     const [isFollowing, setIsFollowing] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [followLoading, setFollowLoading] = useState(false);
     const [selectedPost, setSelectedPost] = useState(null);
     const [showBlockModal, setShowBlockModal] = useState(false);
@@ -25,9 +26,9 @@ export default function OtherProfileScreen({ user, onBack, onBlockUser, currentU
 
     useEffect(() => { if (userId) loadProfile(); }, [userId]);
 
-    const loadProfile = async () => {
+    const loadProfile = async (refresh = false) => {
         try {
-            setIsLoading(true);
+            if (refresh) setIsRefreshing(true); else setIsLoading(true);
             const [profileRes, postsRes] = await Promise.all([
                 userService.getUser(userId),
                 postService.getUserPosts(userId),
@@ -44,6 +45,7 @@ export default function OtherProfileScreen({ user, onBack, onBlockUser, currentU
             console.log('Failed to load other profile:', error);
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
     };
 
@@ -286,7 +288,7 @@ export default function OtherProfileScreen({ user, onBack, onBlockUser, currentU
                         numColumns={3}
                         contentContainerStyle={styles.gridContainer}
                         refreshControl={
-                            <RefreshControl refreshing={false} onRefresh={loadProfile} colors={['#FF5A5F']} />
+                            <RefreshControl refreshing={isRefreshing} onRefresh={() => loadProfile(true)} colors={['#FF5A5F']} />
                         }
                     />
                 )}
