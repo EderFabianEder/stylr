@@ -61,7 +61,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
         setIsLoadingBlocked(true);
         try {
             const response = await blockService.getBlocked();
-            const blocked = response.data?.data || response.data || [];
+            const blocked = response.data?.blocked_users || response.data?.data || [];
             setApiBlockedUsers(blocked);
             setHasLoadedBlocked(true);
         } catch (error) {
@@ -121,6 +121,11 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
 
     const handleLogout = async () => {
         setShowLogoutConfirm(false);
+        try {
+            await authService.logout();
+        } catch (error) {
+            console.log('Logout API error (continuing):', error);
+        }
         if (onLogout) onLogout();
     };
 
@@ -194,7 +199,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // Change Password Modal
-    const ChangePasswordModal = () => (
+    const changePasswordModal = (
         <Modal visible={showChangePassword} transparent={true} animationType="fade" onRequestClose={() => setShowChangePassword(false)}>
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
@@ -234,7 +239,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // Logout Modal
-    const LogoutConfirmModal = () => (
+    const logoutConfirmModal = (
         <Modal visible={showLogoutConfirm} transparent={true} animationType="fade" onRequestClose={() => setShowLogoutConfirm(false)}>
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
@@ -259,7 +264,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // Delete Account Modal
-    const DeleteAccountModal = () => (
+    const deleteAccountModal = (
         <Modal visible={showDeleteAccount} transparent={true} animationType="fade" onRequestClose={() => setShowDeleteAccount(false)}>
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
@@ -290,7 +295,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // Terms Modal
-    const TermsModal = () => (
+    const termsModal = (
         <Modal visible={showTerms} transparent={true} animationType="slide" onRequestClose={() => setShowTerms(false)}>
             <View style={styles.fullModalContainer}>
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.fullModalHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -318,7 +323,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // Privacy Policy Modal
-    const PrivacyPolicyModal = () => (
+    const privacyPolicyModal = (
         <Modal visible={showPrivacyPolicy} transparent={true} animationType="slide" onRequestClose={() => setShowPrivacyPolicy(false)}>
             <View style={styles.fullModalContainer}>
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.fullModalHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -346,7 +351,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     );
 
     // About Modal
-    const AboutModal = () => (
+    const aboutModal = (
         <Modal visible={showAbout} transparent={true} animationType="slide" onRequestClose={() => setShowAbout(false)}>
             <View style={styles.fullModalContainer}>
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.fullModalHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -380,7 +385,7 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
     // Blocked Users Modal - prefer API data once loaded (empty is valid)
     const displayBlockedUsers = hasLoadedBlocked ? apiBlockedUsers : blockedUsers;
 
-    const BlockedUsersModal = () => (
+    const blockedUsersModal = (
         <Modal visible={showBlockedUsers} transparent={true} animationType="slide" onRequestClose={() => setShowBlockedUsers(false)}>
             <View style={styles.fullModalContainer}>
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.fullModalHeader} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}>
@@ -432,13 +437,13 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            <ChangePasswordModal />
-            <LogoutConfirmModal />
-            <DeleteAccountModal />
-            <TermsModal />
-            <PrivacyPolicyModal />
-            <AboutModal />
-            <BlockedUsersModal />
+            {changePasswordModal}
+            {logoutConfirmModal}
+            {deleteAccountModal}
+            {termsModal}
+            {privacyPolicyModal}
+            {aboutModal}
+            {blockedUsersModal}
 
             <LinearGradient colors={['#FF5A5F', '#CE494D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.headerGradient}>
                 <View style={styles.header}>

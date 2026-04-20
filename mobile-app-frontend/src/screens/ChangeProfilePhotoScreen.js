@@ -24,7 +24,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (status !== 'granted') {
-            alert('Berechtigung benötigt: Bitte erlaube den Zugriff auf deine Fotos');
+            alert('Bitte erlaube den Zugriff auf deine Fotos, um dein Profilbild zu ändern.');
             return;
         }
 
@@ -46,7 +46,7 @@ export default function ChangeProfilePhotoScreen({ currentPhoto, onSave, onBack 
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
         if (status !== 'granted') {
-            alert('Berechtigung benötigt: Bitte erlaube den Zugriff auf die Kamera');
+            alert('Bitte erlaube den Zugriff auf die Kamera, um ein Foto aufzunehmen.');
             return;
         }
 
