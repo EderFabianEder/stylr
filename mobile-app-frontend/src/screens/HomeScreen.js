@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Modal, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, X, ArrowRight, MessageCircle, Flag } from 'lucide-react-native';
+import Swiper from 'react-native-deck-swiper';
 import { postService } from '../services/api';
 import CommentScreen from './CommentScreen';
 import ReportScreen from './ReportScreen';
@@ -13,15 +14,21 @@ const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * fact
 const isSmallDevice = SCREEN_HEIGHT < 700;
 const isMediumDevice = SCREEN_HEIGHT >= 700 && SCREEN_HEIGHT < 800;
 
+const CARD_HEIGHT = isSmallDevice ? SCREEN_HEIGHT * 0.55 : isMediumDevice ? SCREEN_HEIGHT * 0.58 : SCREEN_HEIGHT * 0.60;
+
 export default function HomeScreen({ user, onBlockUser }) {
     const [posts, setPosts] = useState([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const [cardIndex, setCardIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
+    const [activeModalPost, setActiveModalPost] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [allSwiped, setAllSwiped] = useState(false);
+
+    const swiperRef = useRef(null);
 
     useEffect(() => { loadPosts(true); }, []);
 
@@ -32,31 +39,25 @@ export default function HomeScreen({ user, onBlockUser }) {
             if (reset) {
                 setIsLoading(true);
                 setOffset(0);
+                setAllSwiped(false);
             } else {
                 setIsLoadingMore(true);
             }
 
             const currentOffset = reset ? 0 : offset;
-
-            // API: GET /posts/for-you?limit=10&offset=0
-            // Response: { success, data: [...], meta: { count, has_more, offset } }
             const response = await postService.getForYou(10, currentOffset);
-
             const newPosts = response.data || [];
             const meta = response.meta || {};
 
             if (reset) {
                 setPosts(newPosts);
-                setCurrentIndex(0);
+                setCardIndex(0);
             } else {
                 setPosts(prev => [...prev, ...newPosts]);
             }
 
-            // Use offset from response meta, or calculate it
-            // meta.offset is the next offset to use
             setOffset(meta.offset ?? currentOffset + newPosts.length);
             setHasMore(meta.has_more ?? newPosts.length >= 10);
-
         } catch (error) {
             console.log('Failed to load posts:', error);
         } finally {
@@ -65,56 +66,119 @@ export default function HomeScreen({ user, onBlockUser }) {
         }
     };
 
-    const handleNext = () => {
-        // Remove current post so it doesn't repeat
-        setPosts(prev => {
-            const updated = prev.filter((_, idx) => idx !== currentIndex);
-            // If we're running low on posts, load more (check against the updated length)
-            if (updated.length <= 4 && hasMore && !isLoadingMore) {
-                loadPosts(false);
-            }
-            return updated;
-        });
-    };
-
-    const handleLike = async () => {
-        const post = posts[currentIndex];
+    // Fire API reaction without blocking UI (optimistic)
+    const fireLike = useCallback((post) => {
         if (!post) return;
-
-        // Fire API call (don't need optimistic update since post is removed)
-        try {
-            if (post.user_has_liked) {
-                await postService.unlike(post.id);
-            } else {
-                await postService.like(post.id);
-            }
-        } catch (error) {
-            console.log('Failed to like:', error);
-        }
-
-        handleNext();
-    };
-
-    const handleDislike = async () => {
-        const post = posts[currentIndex];
-        if (!post) return;
-
-        try {
-            await postService.react(post.id, false);
-        } catch (error) {
-            console.log('Failed to dislike:', error);
-        }
-
-        handleNext();
-    };
-
-    const onRefresh = useCallback(() => {
-        loadPosts(true);
+        (async () => {
+            try {
+                if (post.user_has_liked) await postService.unlike(post.id);
+                else await postService.like(post.id);
+            } catch (e) { console.log('Failed to like:', e); }
+        })();
     }, []);
 
-    const currentPost = posts[currentIndex];
+    const fireDislike = useCallback((post) => {
+        if (!post) return;
+        (async () => {
+            try { await postService.react(post.id, false); }
+            catch (e) { console.log('Failed to dislike:', e); }
+        })();
+    }, []);
+
+    // Called after each swipe (by deck-swiper or via button)
+    const afterSwipe = useCallback((newIndex) => {
+        setCardIndex(newIndex);
+        // Prefetch when we're near the end
+        if (hasMore && !isLoadingMore && posts.length - newIndex <= 4) {
+            loadPosts(false);
+        }
+    }, [hasMore, isLoadingMore, posts.length]);
+
+    const handleSwipedLeft = (idx) => {
+        fireDislike(posts[idx]);
+        afterSwipe(idx + 1);
+    };
+
+    const handleSwipedRight = (idx) => {
+        fireLike(posts[idx]);
+        afterSwipe(idx + 1);
+    };
+
+    const handleSwipedTop = (idx) => {
+        // Skip — keine Reaktion
+        afterSwipe(idx + 1);
+    };
+
+    const handleSwipedAll = () => {
+        setAllSwiped(true);
+        if (hasMore && !isLoadingMore) loadPosts(false);
+    };
+
+    // Buttons steuern den Swiper programmatisch
+    const pressLike = () => swiperRef.current?.swipeRight();
+    const pressDislike = () => swiperRef.current?.swipeLeft();
+    const pressSkip = () => swiperRef.current?.swipeTop();
+
+    const openComments = () => {
+        const post = posts[cardIndex];
+        if (post) {
+            setActiveModalPost(post);
+            setShowComments(true);
+        }
+    };
+
+    const openReport = () => {
+        const post = posts[cardIndex];
+        if (post) {
+            setActiveModalPost(post);
+            setShowReport(true);
+        }
+    };
+
+    const onRefresh = useCallback(() => { loadPosts(true); }, []);
+
     const buttonSize = isSmallDevice ? 50 : isMediumDevice ? 58 : 65;
     const iconSize = isSmallDevice ? 22 : isMediumDevice ? 25 : 28;
+
+    // Rendert eine einzelne Karte
+    const renderCard = (post) => {
+        if (!post) return null;
+        return (
+            <View style={styles.card}>
+                <TouchableOpacity style={styles.flagButton} onPress={openReport} activeOpacity={0.7}>
+                    <Flag size={moderateScale(18)} color="#FF5A5F" />
+                </TouchableOpacity>
+
+                {post.image_url ? (
+                    <Image source={{ uri: post.image_url }} style={styles.cardImage} resizeMode="cover" />
+                ) : (
+                    <View style={[styles.cardImage, styles.noImagePlaceholder]}>
+                        <Text style={styles.noImageText}>📝</Text>
+                    </View>
+                )}
+
+                <View style={styles.infoContainer}>
+                    <Text style={styles.description} numberOfLines={2}>
+                        {post.description || 'Keine Beschreibung'}
+                    </Text>
+                    <View style={styles.userInfo}>
+                        <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.avatar}>
+                            <Text style={styles.avatarText}>
+                                {post.user?.name?.charAt(0).toUpperCase() || 'U'}
+                            </Text>
+                        </LinearGradient>
+                        <Text style={styles.username}>{post.user?.name || 'Unbekannt'}</Text>
+                    </View>
+                    <Text style={styles.statsText}>
+                        ❤️ {post.likes_count || 0} • 👎 {post.dislikes_count || 0} • 💬 {post.comments_count || 0}
+                    </Text>
+                    <Text style={styles.hintText}>
+                        ← Dislike • Like → • ↑ Skip
+                    </Text>
+                </View>
+            </View>
+        );
+    };
 
     if (isLoading) {
         return (
@@ -127,7 +191,7 @@ export default function HomeScreen({ user, onBlockUser }) {
         );
     }
 
-    if (posts.length === 0) {
+    if (posts.length === 0 || allSwiped) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
@@ -135,8 +199,12 @@ export default function HomeScreen({ user, onBlockUser }) {
                         <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
                     </LinearGradient>
                     <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>Keine Posts verfügbar</Text>
-                        <Text style={styles.emptySubtext}>Folge anderen um deren Posts zu sehen!</Text>
+                        <Text style={styles.emptyText}>
+                            {allSwiped ? 'Alle Posts gesehen!' : 'Keine Posts verfügbar'}
+                        </Text>
+                        <Text style={styles.emptySubtext}>
+                            {allSwiped ? 'Schau später wieder vorbei.' : 'Folge anderen um deren Posts zu sehen!'}
+                        </Text>
                         <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
                             <Text style={styles.refreshButtonText}>Aktualisieren</Text>
                         </TouchableOpacity>
@@ -154,74 +222,83 @@ export default function HomeScreen({ user, onBlockUser }) {
                     <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
                 </LinearGradient>
 
-                <View style={styles.cardContainer}>
-                    <View style={styles.card}>
-                        <TouchableOpacity style={styles.flagButton} onPress={() => setShowReport(true)}>
-                            <Flag size={moderateScale(18)} color="#FF5A5F" />
-                        </TouchableOpacity>
-
-                        {currentPost?.image_url ? (
-                            <Image
-                                source={{ uri: currentPost.image_url }}
-                                style={styles.cardImage}
-                                resizeMode="cover"
-                            />
-                        ) : (
-                            <View style={[styles.cardImage, styles.noImagePlaceholder]}>
-                                <Text style={styles.noImageText}>📝</Text>
-                            </View>
-                        )}
-
-                        <View style={styles.infoContainer}>
-                            <Text style={styles.description} numberOfLines={2}>
-                                {currentPost?.description || 'Keine Beschreibung'}
-                            </Text>
-                            <View style={styles.userInfo}>
-                                <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.avatar}>
-                                    <Text style={styles.avatarText}>
-                                        {currentPost?.user?.name?.charAt(0).toUpperCase() || 'U'}
-                                    </Text>
-                                </LinearGradient>
-                                <Text style={styles.username}>
-                                    {currentPost?.user?.name || 'Unbekannt'}
-                                </Text>
-                            </View>
-                            <Text style={styles.statsText}>
-                                ❤️ {currentPost?.likes_count || 0} • 👎 {currentPost?.dislikes_count || 0} • 💬 {currentPost?.comments_count || 0}
-                            </Text>
-                            <Text style={styles.positionText}>
-                                {posts.length} verbleibend{hasMore ? '+' : ''}
-                            </Text>
-                        </View>
-                    </View>
+                <View style={styles.swiperContainer}>
+                    <Swiper
+                        ref={swiperRef}
+                        cards={posts}
+                        cardIndex={cardIndex}
+                        renderCard={renderCard}
+                        onSwipedLeft={handleSwipedLeft}
+                        onSwipedRight={handleSwipedRight}
+                        onSwipedTop={handleSwipedTop}
+                        onSwipedAll={handleSwipedAll}
+                        onTapCard={openComments}
+                        stackSize={3}
+                        stackSeparation={14}
+                        stackScale={4}
+                        disableBottomSwipe
+                        backgroundColor="transparent"
+                        cardVerticalMargin={0}
+                        cardHorizontalMargin={scale(12)}
+                        animateCardOpacity
+                        verticalSwipe
+                        swipeAnimationDuration={260}
+                        overlayLabels={{
+                            left: {
+                                title: 'NOPE',
+                                style: {
+                                    label: styles.overlayLabelLeft,
+                                    wrapper: styles.overlayWrapperLeft,
+                                },
+                            },
+                            right: {
+                                title: 'LIKE',
+                                style: {
+                                    label: styles.overlayLabelRight,
+                                    wrapper: styles.overlayWrapperRight,
+                                },
+                            },
+                            top: {
+                                title: 'SKIP',
+                                style: {
+                                    label: styles.overlayLabelTop,
+                                    wrapper: styles.overlayWrapperTop,
+                                },
+                            },
+                        }}
+                    />
                 </View>
 
                 <View style={styles.actionsWrapper}>
                     <View style={styles.actionsContainer}>
                         <TouchableOpacity
-                            style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }, currentPost?.user_has_liked && styles.likedButton]}
-                            onPress={handleLike}
-                        >
-                            <Heart size={iconSize} color="#FF5A5F" fill={currentPost?.user_has_liked ? "#FF5A5F" : "transparent"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
                             style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={handleDislike}
+                            onPress={pressDislike}
+                            activeOpacity={0.7}
                         >
                             <X size={iconSize} color="#333" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={handleNext}
+                            onPress={pressSkip}
+                            activeOpacity={0.7}
                         >
                             <ArrowRight size={iconSize} color="#333" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                            style={[styles.actionButton, styles.likeActionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+                            onPress={pressLike}
+                            activeOpacity={0.7}
+                        >
+                            <Heart size={iconSize} color="#FF5A5F" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                             style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={() => setShowComments(true)}
+                            onPress={openComments}
+                            activeOpacity={0.7}
                         >
                             <MessageCircle size={iconSize} color="#333" />
                         </TouchableOpacity>
@@ -233,14 +310,19 @@ export default function HomeScreen({ user, onBlockUser }) {
                 </View>
 
                 <Modal visible={showComments} animationType="slide" onRequestClose={() => setShowComments(false)}>
-                    <CommentScreen post={currentPost} onClose={() => setShowComments(false)} currentUser={user} onBlockUser={onBlockUser} />
+                    <CommentScreen
+                        post={activeModalPost}
+                        onClose={() => setShowComments(false)}
+                        currentUser={user}
+                        onBlockUser={onBlockUser}
+                    />
                 </Modal>
 
                 <Modal visible={showReport} animationType="slide" onRequestClose={() => setShowReport(false)}>
                     <ReportScreen
-                        targetUser={currentPost?.user}
+                        targetUser={activeModalPost?.user}
                         contentType="post"
-                        contentId={currentPost?.id}
+                        contentId={activeModalPost?.id}
                         onClose={() => setShowReport(false)}
                     />
                 </Modal>
@@ -262,8 +344,21 @@ const styles = StyleSheet.create({
     headerGradient: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
     header: { paddingVertical: verticalScale(12), alignItems: 'center' },
     logo: { fontSize: moderateScale(22), fontWeight: 'bold', color: '#fff', letterSpacing: 3 },
-    cardContainer: { justifyContent: 'center', alignItems: 'center', paddingHorizontal: scale(12), paddingVertical: verticalScale(10) },
-    card: { width: SCREEN_WIDTH - scale(24), maxWidth: 400, height: isSmallDevice ? SCREEN_HEIGHT * 0.50 : isMediumDevice ? SCREEN_HEIGHT * 0.52 : SCREEN_HEIGHT * 0.55, backgroundColor: '#fff', borderRadius: 20, overflow: 'hidden', elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+
+    // Swiper container — muss flex haben damit der Swiper seine Größe kennt
+    swiperContainer: { height: CARD_HEIGHT, marginTop: verticalScale(6) },
+
+    card: {
+        height: CARD_HEIGHT - verticalScale(20),
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        overflow: 'hidden',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+    },
     flagButton: { position: 'absolute', top: 12, left: 12, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: 8 },
     cardImage: { width: '100%', flex: 1, minHeight: '55%', maxHeight: '70%', backgroundColor: '#eee' },
     noImagePlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' },
@@ -275,9 +370,18 @@ const styles = StyleSheet.create({
     avatarText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
     username: { fontSize: 13, color: '#666', fontWeight: '500' },
     statsText: { fontSize: 12, color: '#888' },
-    positionText: { fontSize: 10, color: '#aaa', marginTop: 2 },
+    hintText: { fontSize: 10, color: '#bbb', marginTop: 4, textAlign: 'center' },
+
+    // Overlay-Labels während des Ziehens
+    overlayLabelLeft: { borderColor: '#FF3B30', color: '#FF3B30', borderWidth: 4, fontSize: 36, fontWeight: 'bold', padding: 10, borderRadius: 10 },
+    overlayWrapperLeft: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 40, marginRight: 30 },
+    overlayLabelRight: { borderColor: '#34C759', color: '#34C759', borderWidth: 4, fontSize: 36, fontWeight: 'bold', padding: 10, borderRadius: 10 },
+    overlayWrapperRight: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', marginTop: 40, marginLeft: 30 },
+    overlayLabelTop: { borderColor: '#007AFF', color: '#007AFF', borderWidth: 4, fontSize: 32, fontWeight: 'bold', padding: 10, borderRadius: 10 },
+    overlayWrapperTop: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+
     actionsWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
     actionsContainer: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', paddingHorizontal: scale(15) },
     actionButton: { backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 5 },
-    likedButton: { backgroundColor: '#fff0f0' },
+    likeActionButton: { backgroundColor: '#fff0f0' },
 });
