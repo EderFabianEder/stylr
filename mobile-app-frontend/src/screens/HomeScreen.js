@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar, Modal, SafeAreaView, Platform, ActivityIndicator } from 'react-native';
+import {
+    View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, StatusBar,
+    Modal, SafeAreaView, Platform, ActivityIndicator, Animated, PanResponder,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, X, ArrowRight, MessageCircle, Flag } from 'lucide-react-native';
-import Swiper from 'react-native-deck-swiper';
 import { postService } from '../services/api';
 import CommentScreen from './CommentScreen';
 import ReportScreen from './ReportScreen';
@@ -14,35 +16,32 @@ const moderateScale = (size, factor = 0.5) => size + (scale(size) - size) * fact
 const isSmallDevice = SCREEN_HEIGHT < 700;
 const isMediumDevice = SCREEN_HEIGHT >= 700 && SCREEN_HEIGHT < 800;
 
-const CARD_HEIGHT = isSmallDevice ? SCREEN_HEIGHT * 0.55 : isMediumDevice ? SCREEN_HEIGHT * 0.58 : SCREEN_HEIGHT * 0.60;
+// Swipe-Schwellenwerte
+const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
+const VELOCITY_THRESHOLD = 0.4;
+const SWIPE_OUT_DURATION = 260;
 
 export default function HomeScreen({ user, onBlockUser }) {
     const [posts, setPosts] = useState([]);
-    const [cardIndex, setCardIndex] = useState(0);
+    const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
-    const [activeModalPost, setActiveModalPost] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [allSwiped, setAllSwiped] = useState(false);
 
-    const swiperRef = useRef(null);
+    // Animated values
+    const position = useRef(new Animated.ValueXY()).current;
+    const isAnimating = useRef(false);
 
     useEffect(() => { loadPosts(true); }, []);
 
     const loadPosts = async (reset = false) => {
         if (isLoadingMore && !reset) return;
-
         try {
-            if (reset) {
-                setIsLoading(true);
-                setOffset(0);
-                setAllSwiped(false);
-            } else {
-                setIsLoadingMore(true);
-            }
+            if (reset) { setIsLoading(true); setOffset(0); }
+            else { setIsLoadingMore(true); }
 
             const currentOffset = reset ? 0 : offset;
             const response = await postService.getForYou(10, currentOffset);
@@ -51,7 +50,7 @@ export default function HomeScreen({ user, onBlockUser }) {
 
             if (reset) {
                 setPosts(newPosts);
-                setCardIndex(0);
+                setCurrentIndex(0);
             } else {
                 setPosts(prev => [...prev, ...newPosts]);
             }
@@ -66,7 +65,6 @@ export default function HomeScreen({ user, onBlockUser }) {
         }
     };
 
-    // Fire API reaction without blocking UI (optimistic)
     const fireLike = useCallback((post) => {
         if (!post) return;
         (async () => {
@@ -85,100 +83,109 @@ export default function HomeScreen({ user, onBlockUser }) {
         })();
     }, []);
 
-    // Called after each swipe (by deck-swiper or via button)
-    const afterSwipe = useCallback((newIndex) => {
-        setCardIndex(newIndex);
-        // Prefetch when we're near the end
-        if (hasMore && !isLoadingMore && posts.length - newIndex <= 4) {
-            loadPosts(false);
-        }
-    }, [hasMore, isLoadingMore, posts.length]);
+    // Weiter zum nächsten Post + ggf. Nachladen
+    const goNext = useCallback(() => {
+        setCurrentIndex(prev => {
+            const next = prev + 1;
+            if (hasMore && !isLoadingMore && posts.length - next <= 4) {
+                loadPosts(false);
+            }
+            return next;
+        });
+        position.setValue({ x: 0, y: 0 });
+        isAnimating.current = false;
+    }, [hasMore, isLoadingMore, posts.length, position]);
 
-    const handleSwipedLeft = (idx) => {
-        fireDislike(posts[idx]);
-        afterSwipe(idx + 1);
-    };
+    // Karte rausanimieren
+    const swipeOut = useCallback((direction) => {
+        if (isAnimating.current) return;
+        isAnimating.current = true;
 
-    const handleSwipedRight = (idx) => {
-        fireLike(posts[idx]);
-        afterSwipe(idx + 1);
-    };
+        const post = posts[currentIndex];
+        let toX = 0, toY = 0;
+        if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireLike(post); }
+        else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireDislike(post); }
+        else if (direction === 'up') { toY = -SCREEN_HEIGHT; /* skip, keine Reaktion */ }
 
-    const handleSwipedTop = (idx) => {
-        // Skip — keine Reaktion
-        afterSwipe(idx + 1);
-    };
+        Animated.timing(position, {
+            toValue: { x: toX, y: toY },
+            duration: SWIPE_OUT_DURATION,
+            useNativeDriver: false,
+        }).start(goNext);
+    }, [currentIndex, posts, fireLike, fireDislike, goNext, position]);
 
-    const handleSwipedAll = () => {
-        setAllSwiped(true);
-        if (hasMore && !isLoadingMore) loadPosts(false);
-    };
+    const resetPosition = useCallback(() => {
+        Animated.spring(position, {
+            toValue: { x: 0, y: 0 },
+            friction: 6,
+            useNativeDriver: false,
+        }).start();
+    }, [position]);
 
-    // Buttons steuern den Swiper programmatisch
-    const pressLike = () => swiperRef.current?.swipeRight();
-    const pressDislike = () => swiperRef.current?.swipeLeft();
-    const pressSkip = () => swiperRef.current?.swipeTop();
+    // PanResponder für Drag-Gesten
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8,
+            onPanResponderMove: (_, g) => {
+                if (isAnimating.current) return;
+                position.setValue({ x: g.dx, y: g.dy });
+            },
+            onPanResponderRelease: (_, g) => {
+                if (isAnimating.current) return;
+                // Vorrang: große Horizontal-Bewegung vor vertikaler
+                if (g.dx > SWIPE_THRESHOLD || g.vx > VELOCITY_THRESHOLD) {
+                    swipeOut('right');
+                } else if (g.dx < -SWIPE_THRESHOLD || g.vx < -VELOCITY_THRESHOLD) {
+                    swipeOut('left');
+                } else if (g.dy < -SWIPE_THRESHOLD || g.vy < -VELOCITY_THRESHOLD) {
+                    swipeOut('up');
+                } else {
+                    resetPosition();
+                }
+            },
+            onPanResponderTerminate: () => resetPosition(),
+        })
+    ).current;
 
-    const openComments = () => {
-        const post = posts[cardIndex];
-        if (post) {
-            setActiveModalPost(post);
-            setShowComments(true);
-        }
-    };
-
-    const openReport = () => {
-        const post = posts[cardIndex];
-        if (post) {
-            setActiveModalPost(post);
-            setShowReport(true);
-        }
-    };
+    // Button-Aktionen triggern die gleiche Swipe-Animation
+    const pressLike = () => swipeOut('right');
+    const pressDislike = () => swipeOut('left');
+    const pressSkip = () => swipeOut('up');
 
     const onRefresh = useCallback(() => { loadPosts(true); }, []);
 
+    const currentPost = posts[currentIndex];
+    const nextPost = posts[currentIndex + 1];
     const buttonSize = isSmallDevice ? 50 : isMediumDevice ? 58 : 65;
     const iconSize = isSmallDevice ? 22 : isMediumDevice ? 25 : 28;
 
-    // Rendert eine einzelne Karte
-    const renderCard = (post) => {
-        if (!post) return null;
-        return (
-            <View style={styles.card}>
-                <TouchableOpacity style={styles.flagButton} onPress={openReport} activeOpacity={0.7}>
-                    <Flag size={moderateScale(18)} color="#FF5A5F" />
-                </TouchableOpacity>
-
-                {post.image_url ? (
-                    <Image source={{ uri: post.image_url }} style={styles.cardImage} resizeMode="cover" />
-                ) : (
-                    <View style={[styles.cardImage, styles.noImagePlaceholder]}>
-                        <Text style={styles.noImageText}>📝</Text>
-                    </View>
-                )}
-
-                <View style={styles.infoContainer}>
-                    <Text style={styles.description} numberOfLines={2}>
-                        {post.description || 'Keine Beschreibung'}
-                    </Text>
-                    <View style={styles.userInfo}>
-                        <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.avatar}>
-                            <Text style={styles.avatarText}>
-                                {post.user?.name?.charAt(0).toUpperCase() || 'U'}
-                            </Text>
-                        </LinearGradient>
-                        <Text style={styles.username}>{post.user?.name || 'Unbekannt'}</Text>
-                    </View>
-                    <Text style={styles.statsText}>
-                        ❤️ {post.likes_count || 0} • 👎 {post.dislikes_count || 0} • 💬 {post.comments_count || 0}
-                    </Text>
-                    <Text style={styles.hintText}>
-                        ← Dislike • Like → • ↑ Skip
-                    </Text>
-                </View>
-            </View>
-        );
-    };
+    // Interpolation für Rotation und Overlays
+    const rotate = position.x.interpolate({
+        inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+        outputRange: ['-18deg', '0deg', '18deg'],
+    });
+    const likeOpacity = position.x.interpolate({
+        inputRange: [0, SWIPE_THRESHOLD],
+        outputRange: [0, 1],
+        extrapolate: 'clamp',
+    });
+    const nopeOpacity = position.x.interpolate({
+        inputRange: [-SWIPE_THRESHOLD, 0],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+    });
+    const skipOpacity = position.y.interpolate({
+        inputRange: [-SWIPE_THRESHOLD, 0],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+    });
+    // Zweite Karte rutscht leicht nach vorne, wenn vorne rausgewischt wird
+    const nextCardScale = position.x.interpolate({
+        inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
+        outputRange: [1, 0.94, 1],
+        extrapolate: 'clamp',
+    });
 
     if (isLoading) {
         return (
@@ -191,7 +198,7 @@ export default function HomeScreen({ user, onBlockUser }) {
         );
     }
 
-    if (posts.length === 0 || allSwiped) {
+    if (!currentPost) {
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
@@ -200,10 +207,10 @@ export default function HomeScreen({ user, onBlockUser }) {
                     </LinearGradient>
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>
-                            {allSwiped ? 'Alle Posts gesehen!' : 'Keine Posts verfügbar'}
+                            {posts.length > 0 ? 'Alle Posts gesehen!' : 'Keine Posts verfügbar'}
                         </Text>
                         <Text style={styles.emptySubtext}>
-                            {allSwiped ? 'Schau später wieder vorbei.' : 'Folge anderen um deren Posts zu sehen!'}
+                            {posts.length > 0 ? 'Schau später wieder vorbei.' : 'Folge anderen um deren Posts zu sehen!'}
                         </Text>
                         <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
                             <Text style={styles.refreshButtonText}>Aktualisieren</Text>
@@ -214,6 +221,42 @@ export default function HomeScreen({ user, onBlockUser }) {
         );
     }
 
+    const renderCardContent = (post) => (
+        <>
+            <TouchableOpacity style={styles.flagButton} onPress={() => setShowReport(true)} activeOpacity={0.7}>
+                <Flag size={moderateScale(18)} color="#FF5A5F" />
+            </TouchableOpacity>
+
+            {post.image_url ? (
+                <Image source={{ uri: post.image_url }} style={styles.cardImage} resizeMode="cover" />
+            ) : (
+                <View style={[styles.cardImage, styles.noImagePlaceholder]}>
+                    <Text style={styles.noImageText}>📝</Text>
+                </View>
+            )}
+
+            <View style={styles.infoContainer}>
+                <Text style={styles.description} numberOfLines={2}>
+                    {post.description || 'Keine Beschreibung'}
+                </Text>
+                <View style={styles.userInfo}>
+                    <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                            {post.user?.name?.charAt(0).toUpperCase() || 'U'}
+                        </Text>
+                    </LinearGradient>
+                    <Text style={styles.username}>{post.user?.name || 'Unbekannt'}</Text>
+                </View>
+                <Text style={styles.statsText}>
+                    ❤️ {post.likes_count || 0} • 👎 {post.dislikes_count || 0} • 💬 {post.comments_count || 0}
+                </Text>
+                <Text style={styles.hintText}>
+                    ← Dislike  •  Like →  •  ↑ Skip
+                </Text>
+            </View>
+        </>
+    );
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <View style={styles.container}>
@@ -222,51 +265,48 @@ export default function HomeScreen({ user, onBlockUser }) {
                     <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
                 </LinearGradient>
 
-                <View style={styles.swiperContainer}>
-                    <Swiper
-                        ref={swiperRef}
-                        cards={posts}
-                        cardIndex={cardIndex}
-                        renderCard={renderCard}
-                        onSwipedLeft={handleSwipedLeft}
-                        onSwipedRight={handleSwipedRight}
-                        onSwipedTop={handleSwipedTop}
-                        onSwipedAll={handleSwipedAll}
-                        onTapCard={openComments}
-                        stackSize={3}
-                        stackSeparation={14}
-                        stackScale={4}
-                        disableBottomSwipe
-                        backgroundColor="transparent"
-                        cardVerticalMargin={0}
-                        cardHorizontalMargin={scale(12)}
-                        animateCardOpacity
-                        verticalSwipe
-                        swipeAnimationDuration={260}
-                        overlayLabels={{
-                            left: {
-                                title: 'NOPE',
-                                style: {
-                                    label: styles.overlayLabelLeft,
-                                    wrapper: styles.overlayWrapperLeft,
-                                },
+                <View style={styles.cardContainer}>
+                    {/* Zweite Karte (Vorschau, unter der aktiven) */}
+                    {nextPost && (
+                        <Animated.View
+                            style={[
+                                styles.card,
+                                styles.nextCard,
+                                { transform: [{ scale: nextCardScale }] },
+                            ]}
+                            pointerEvents="none"
+                        >
+                            {renderCardContent(nextPost)}
+                        </Animated.View>
+                    )}
+
+                    {/* Aktive Karte */}
+                    <Animated.View
+                        {...panResponder.panHandlers}
+                        style={[
+                            styles.card,
+                            {
+                                transform: [
+                                    { translateX: position.x },
+                                    { translateY: position.y },
+                                    { rotate },
+                                ],
                             },
-                            right: {
-                                title: 'LIKE',
-                                style: {
-                                    label: styles.overlayLabelRight,
-                                    wrapper: styles.overlayWrapperRight,
-                                },
-                            },
-                            top: {
-                                title: 'SKIP',
-                                style: {
-                                    label: styles.overlayLabelTop,
-                                    wrapper: styles.overlayWrapperTop,
-                                },
-                            },
-                        }}
-                    />
+                        ]}
+                    >
+                        {renderCardContent(currentPost)}
+
+                        {/* Overlays */}
+                        <Animated.View style={[styles.overlay, styles.overlayLike, { opacity: likeOpacity }]}>
+                            <Text style={styles.overlayLikeText}>LIKE</Text>
+                        </Animated.View>
+                        <Animated.View style={[styles.overlay, styles.overlayNope, { opacity: nopeOpacity }]}>
+                            <Text style={styles.overlayNopeText}>NOPE</Text>
+                        </Animated.View>
+                        <Animated.View style={[styles.overlay, styles.overlaySkip, { opacity: skipOpacity }]}>
+                            <Text style={styles.overlaySkipText}>SKIP</Text>
+                        </Animated.View>
+                    </Animated.View>
                 </View>
 
                 <View style={styles.actionsWrapper}>
@@ -297,7 +337,7 @@ export default function HomeScreen({ user, onBlockUser }) {
 
                         <TouchableOpacity
                             style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={openComments}
+                            onPress={() => setShowComments(true)}
                             activeOpacity={0.7}
                         >
                             <MessageCircle size={iconSize} color="#333" />
@@ -311,7 +351,7 @@ export default function HomeScreen({ user, onBlockUser }) {
 
                 <Modal visible={showComments} animationType="slide" onRequestClose={() => setShowComments(false)}>
                     <CommentScreen
-                        post={activeModalPost}
+                        post={currentPost}
                         onClose={() => setShowComments(false)}
                         currentUser={user}
                         onBlockUser={onBlockUser}
@@ -320,9 +360,9 @@ export default function HomeScreen({ user, onBlockUser }) {
 
                 <Modal visible={showReport} animationType="slide" onRequestClose={() => setShowReport(false)}>
                     <ReportScreen
-                        targetUser={activeModalPost?.user}
+                        targetUser={currentPost?.user}
                         contentType="post"
-                        contentId={activeModalPost?.id}
+                        contentId={currentPost?.id}
                         onClose={() => setShowReport(false)}
                     />
                 </Modal>
@@ -330,6 +370,9 @@ export default function HomeScreen({ user, onBlockUser }) {
         </SafeAreaView>
     );
 }
+
+const CARD_WIDTH = SCREEN_WIDTH - scale(24);
+const CARD_HEIGHT = isSmallDevice ? SCREEN_HEIGHT * 0.50 : isMediumDevice ? SCREEN_HEIGHT * 0.52 : SCREEN_HEIGHT * 0.55;
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: '#FF5A5F' },
@@ -345,11 +388,16 @@ const styles = StyleSheet.create({
     header: { paddingVertical: verticalScale(12), alignItems: 'center' },
     logo: { fontSize: moderateScale(22), fontWeight: 'bold', color: '#fff', letterSpacing: 3 },
 
-    // Swiper container — muss flex haben damit der Swiper seine Größe kennt
-    swiperContainer: { height: CARD_HEIGHT, marginTop: verticalScale(6) },
-
+    cardContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: verticalScale(10),
+        height: CARD_HEIGHT + verticalScale(20),
+    },
     card: {
-        height: CARD_HEIGHT - verticalScale(20),
+        width: CARD_WIDTH,
+        maxWidth: 400,
+        height: CARD_HEIGHT,
         backgroundColor: '#fff',
         borderRadius: 20,
         overflow: 'hidden',
@@ -358,6 +406,11 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
+        position: 'absolute',
+    },
+    nextCard: {
+        top: 8,
+        opacity: 0.96,
     },
     flagButton: { position: 'absolute', top: 12, left: 12, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: 8 },
     cardImage: { width: '100%', flex: 1, minHeight: '55%', maxHeight: '70%', backgroundColor: '#eee' },
@@ -372,13 +425,21 @@ const styles = StyleSheet.create({
     statsText: { fontSize: 12, color: '#888' },
     hintText: { fontSize: 10, color: '#bbb', marginTop: 4, textAlign: 'center' },
 
-    // Overlay-Labels während des Ziehens
-    overlayLabelLeft: { borderColor: '#FF3B30', color: '#FF3B30', borderWidth: 4, fontSize: 36, fontWeight: 'bold', padding: 10, borderRadius: 10 },
-    overlayWrapperLeft: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 40, marginRight: 30 },
-    overlayLabelRight: { borderColor: '#34C759', color: '#34C759', borderWidth: 4, fontSize: 36, fontWeight: 'bold', padding: 10, borderRadius: 10 },
-    overlayWrapperRight: { flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'flex-start', marginTop: 40, marginLeft: 30 },
-    overlayLabelTop: { borderColor: '#007AFF', color: '#007AFF', borderWidth: 4, fontSize: 32, fontWeight: 'bold', padding: 10, borderRadius: 10 },
-    overlayWrapperTop: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+    // Overlays
+    overlay: {
+        position: 'absolute',
+        top: 40,
+        paddingVertical: 8,
+        paddingHorizontal: 16,
+        borderWidth: 4,
+        borderRadius: 10,
+    },
+    overlayLike: { left: 20, borderColor: '#34C759', transform: [{ rotate: '-18deg' }] },
+    overlayLikeText: { color: '#34C759', fontSize: 32, fontWeight: '900' },
+    overlayNope: { right: 20, borderColor: '#FF3B30', transform: [{ rotate: '18deg' }] },
+    overlayNopeText: { color: '#FF3B30', fontSize: 32, fontWeight: '900' },
+    overlaySkip: { alignSelf: 'center', left: 0, right: 0, top: 30, alignItems: 'center', borderColor: '#007AFF', marginHorizontal: 60 },
+    overlaySkipText: { color: '#007AFF', fontSize: 28, fontWeight: '900' },
 
     actionsWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5' },
     actionsContainer: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center', width: '100%', paddingHorizontal: scale(15) },
