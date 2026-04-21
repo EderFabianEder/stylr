@@ -21,13 +21,21 @@ const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 const VELOCITY_THRESHOLD = 0.4;
 const SWIPE_OUT_DURATION = 260;
 
+const FEED_TYPES = [
+    { key: 'forYou', label: 'For You' },
+    { key: 'following', label: 'Follower' },
+    { key: 'friends', label: 'Freunde' },
+];
+
 export default function HomeScreen({ user, onBlockUser }) {
+    const [feedType, setFeedType] = useState('forYou');
     const [posts, setPosts] = useState([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [offset, setOffset] = useState(0);
+    // offset (for-you) bzw. page (following/friends)
+    const [cursor, setCursor] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
@@ -35,30 +43,53 @@ export default function HomeScreen({ user, onBlockUser }) {
     const position = useRef(new Animated.ValueXY()).current;
     const isAnimating = useRef(false);
 
-    useEffect(() => { loadPosts(true); }, []);
+    // Feed wechseln → von vorn laden
+    useEffect(() => { loadPosts(true); }, [feedType]);
 
     const loadPosts = async (reset = false) => {
         if (isLoadingMore && !reset) return;
         try {
-            if (reset) { setIsLoading(true); setOffset(0); }
+            if (reset) { setIsLoading(true); setCursor(0); }
             else { setIsLoadingMore(true); }
 
-            const currentOffset = reset ? 0 : offset;
-            const response = await postService.getForYou(10, currentOffset);
-            const newPosts = response.data || [];
-            const meta = response.meta || {};
+            let newPosts = [];
+            let nextHasMore = false;
+            let nextCursor = cursor;
+
+            if (feedType === 'forYou') {
+                const currentOffset = reset ? 0 : cursor;
+                const response = await postService.getForYou(10, currentOffset);
+                newPosts = response.data || [];
+                const meta = response.meta || {};
+                nextCursor = meta.offset ?? currentOffset + newPosts.length;
+                nextHasMore = meta.has_more ?? newPosts.length >= 10;
+            } else {
+                const currentPage = reset ? 1 : (cursor || 1);
+                const response = feedType === 'following'
+                    ? await postService.getFollowing(currentPage)
+                    : await postService.getFriends(currentPage);
+                // Laravel paginator: { data: { data: [...], current_page, last_page } } oder { data: [...] }
+                const data = response.data || {};
+                newPosts = data.data || (Array.isArray(data) ? data : []);
+                const currentP = data.current_page || currentPage;
+                const lastP = data.last_page || currentPage;
+                nextCursor = currentP + 1;
+                nextHasMore = currentP < lastP;
+            }
 
             if (reset) {
                 setPosts(newPosts);
                 setCurrentIndex(0);
+                position.setValue({ x: 0, y: 0 });
             } else {
                 setPosts(prev => [...prev, ...newPosts]);
             }
 
-            setOffset(meta.offset ?? currentOffset + newPosts.length);
-            setHasMore(meta.has_more ?? newPosts.length >= 10);
+            setCursor(nextCursor);
+            setHasMore(nextHasMore);
         } catch (error) {
             console.log('Failed to load posts:', error);
+            if (reset) setPosts([]);
         } finally {
             setIsLoading(false);
             setIsLoadingMore(false);
@@ -199,18 +230,37 @@ export default function HomeScreen({ user, onBlockUser }) {
     }
 
     if (!currentPost) {
+        const emptyHints = {
+            forYou: 'Folge anderen um deren Posts zu sehen!',
+            following: 'Du folgst noch niemandem — suche nach Usern um ihnen zu folgen.',
+            friends: 'Du hast noch keine gegenseitigen Follows.',
+        };
         return (
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.container}>
                     <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
                         <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
+                        <View style={styles.feedTabs}>
+                            {FEED_TYPES.map(tab => (
+                                <TouchableOpacity
+                                    key={tab.key}
+                                    style={[styles.feedTab, feedType === tab.key && styles.feedTabActive]}
+                                    onPress={() => feedType !== tab.key && setFeedType(tab.key)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.feedTabText, feedType === tab.key && styles.feedTabTextActive]}>
+                                        {tab.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     </LinearGradient>
                     <View style={styles.emptyContainer}>
                         <Text style={styles.emptyText}>
                             {posts.length > 0 ? 'Alle Posts gesehen!' : 'Keine Posts verfügbar'}
                         </Text>
                         <Text style={styles.emptySubtext}>
-                            {posts.length > 0 ? 'Schau später wieder vorbei.' : 'Folge anderen um deren Posts zu sehen!'}
+                            {posts.length > 0 ? 'Schau später wieder vorbei.' : emptyHints[feedType]}
                         </Text>
                         <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
                             <Text style={styles.refreshButtonText}>Aktualisieren</Text>
@@ -263,6 +313,20 @@ export default function HomeScreen({ user, onBlockUser }) {
                 <StatusBar barStyle="light-content" />
                 <LinearGradient colors={['#FF5A5F', '#CE494D']} style={styles.headerGradient}>
                     <View style={styles.header}><Text style={styles.logo}>STYLR</Text></View>
+                    <View style={styles.feedTabs}>
+                        {FEED_TYPES.map(tab => (
+                            <TouchableOpacity
+                                key={tab.key}
+                                style={[styles.feedTab, feedType === tab.key && styles.feedTabActive]}
+                                onPress={() => feedType !== tab.key && setFeedType(tab.key)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[styles.feedTabText, feedType === tab.key && styles.feedTabTextActive]}>
+                                    {tab.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </LinearGradient>
 
                 <View style={styles.cardContainer}>
@@ -385,8 +449,13 @@ const styles = StyleSheet.create({
     refreshButton: { backgroundColor: '#FF5A5F', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
     refreshButtonText: { color: '#fff', fontWeight: '600' },
     headerGradient: { paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
-    header: { paddingVertical: verticalScale(12), alignItems: 'center' },
+    header: { paddingVertical: verticalScale(10), alignItems: 'center' },
     logo: { fontSize: moderateScale(22), fontWeight: 'bold', color: '#fff', letterSpacing: 3 },
+    feedTabs: { flexDirection: 'row', justifyContent: 'center', paddingBottom: verticalScale(10), paddingHorizontal: scale(20), gap: 6 },
+    feedTab: { paddingVertical: 7, paddingHorizontal: 16, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)' },
+    feedTabActive: { backgroundColor: '#fff' },
+    feedTabText: { fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.85)' },
+    feedTabTextActive: { color: '#FF5A5F' },
 
     cardContainer: {
         alignItems: 'center',
