@@ -6,7 +6,9 @@
       "Bash(cmd /c dir \"C:\\\\Users\\\\User\\\\Herd\\\\stylr-api\\\\.env*\")",
       "Bash(cmd /c \"if exist C:\\\\Users\\\\User\\\\Herd\\\\stylr-api\\\\public\\\\storage \\(echo SYMLINK EXISTS\\) else \\(echo SYMLINK MISSING\\)\")",
       "Bash(cmd /c \"if exist C:\\\\Users\\\\User\\\\Herd\\\\stylr-api\\\\.env \\(echo ENV EXISTS\\) else \\(echo ENV MISSING\\)\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(npx --prefix mobile-app-frontend eslint mobile-app-frontend/src/services/api.js mobile-app-frontend/src/screens/ChangeProfilePhotoScreen.js)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

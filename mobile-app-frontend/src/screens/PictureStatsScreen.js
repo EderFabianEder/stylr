@@ -35,10 +35,16 @@ export default function PictureStatsScreen({ picture, isOwnPicture, onBack, onCl
             setDislikesCount(postData.dislikes_count || 0);
             setCommentsCount(postData.comments_count || postData.comments?.length || 0);
 
-            // Set initial reaction state from API
-            if (postData.user_has_liked === true) {
+            // Set initial reaction state from API (handle multiple response shapes)
+            // Backend may return: user_has_liked/user_has_disliked flags,
+            // user_reaction ('like'|'dislike'|null), or nested reaction.is_like
+            const userReaction =
+                postData.user_reaction ??
+                (postData.reaction && (postData.reaction.is_like === true ? 'like' : postData.reaction.is_like === false ? 'dislike' : null));
+
+            if (postData.user_has_liked === true || userReaction === 'like') {
                 setReaction('liked');
-            } else if (postData.user_has_disliked === true) {
+            } else if (postData.user_has_disliked === true || userReaction === 'dislike') {
                 setReaction('disliked');
             } else {
                 setReaction(null);

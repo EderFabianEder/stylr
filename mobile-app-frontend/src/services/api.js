@@ -13,6 +13,19 @@ const API_URL = 'https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1';
 
 let authToken = null;
 
+// Subscribers, die bei 401 (abgelaufenes/ungültiges Token) benachrichtigt werden
+const unauthorizedListeners = new Set();
+
+/**
+ * Registriere einen Listener, der aufgerufen wird, wenn ein API-Request 401
+ * zurückgibt. App.js nutzt das, um automatisch zum Login-Screen zu navigieren.
+ * Gibt eine Unsubscribe-Funktion zurück.
+ */
+export const onUnauthorized = (listener) => {
+    unauthorizedListeners.add(listener);
+    return () => unauthorizedListeners.delete(listener);
+};
+
 // Device name für Token
 const getDeviceName = () => {
     return `${Platform.OS}-${Platform.Version || 'unknown'}`;
@@ -56,10 +69,13 @@ const apiRequest = async (endpoint, options = {}) => {
     }
 
     if (!response.ok) {
-        // Auto-clear invalidated tokens
+        // Auto-clear invalidated tokens & Listener benachrichtigen
         if (response.status === 401) {
             authToken = null;
             try { await AsyncStorage.removeItem('authToken'); } catch (e) {}
+            unauthorizedListeners.forEach(fn => {
+                try { fn(); } catch (e) { /* ignore listener errors */ }
+            });
         }
         throw {
             status: response.status,

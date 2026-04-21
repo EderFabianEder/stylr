@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Home, User, Settings, Lock } from 'lucide-react-native';
-import { authService } from './src/services/api';
+import { authService, onUnauthorized } from './src/services/api';
 
 // Screens
 import LoginScreen from './src/screens/LoginScreen';
@@ -15,6 +16,7 @@ import AdminDashboardScreen from './src/screens/AdminDashboardScreen';
 
 export default function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isRestoringSession, setIsRestoringSession] = useState(true);
     const [currentScreen, setCurrentScreen] = useState('login');
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('home');
@@ -23,6 +25,44 @@ export default function App() {
     // Admin check - tokenAbilities returns 'admin:*' for admins
     const isAdmin = user?.is_admin === true || user?.is_admin === 1 ||
         user?.abilities?.includes('admin:*');
+
+    // Session beim App-Start aus AsyncStorage wiederherstellen
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const token = await AsyncStorage.getItem('authToken');
+                if (!token) return;
+                const response = await authService.getUser();
+                if (cancelled) return;
+                const userData = {
+                    ...(response.data?.user || response.data),
+                    abilities: response.data?.abilities || [],
+                };
+                if (userData?.id) {
+                    setUser(userData);
+                    setIsAuthenticated(true);
+                }
+            } catch (e) {
+                // Token ungültig / Netzwerkfehler — User muss sich neu einloggen
+            } finally {
+                if (!cancelled) setIsRestoringSession(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Globaler 401-Handler: Token abgelaufen → zurück zum Login
+    useEffect(() => {
+        const unsubscribe = onUnauthorized(() => {
+            setIsAuthenticated(false);
+            setUser(null);
+            setBlockedUsers([]);
+            setCurrentScreen('login');
+            setActiveTab('home');
+        });
+        return unsubscribe;
+    }, []);
 
     const handleLogin = (userData) => {
         setUser(userData);
@@ -62,6 +102,21 @@ export default function App() {
         setCurrentScreen('login');
         setActiveTab('home');
     };
+
+    // Während Session-Restore: Splash/Loading
+    if (isRestoringSession) {
+        return (
+            <View style={styles.splashContainer}>
+                <StatusBar barStyle="light-content" backgroundColor="#FF5A5F" />
+                <LinearGradient
+                    colors={['#FF5A5F', '#CE494D']}
+                    style={StyleSheet.absoluteFill}
+                />
+                <Text style={styles.splashLogo}>STYLR</Text>
+                <ActivityIndicator size="large" color="#fff" style={{ marginTop: 20 }} />
+            </View>
+        );
+    }
 
     // Auth Flow
     if (!isAuthenticated) {
@@ -180,5 +235,17 @@ const styles = StyleSheet.create({
     labelActive: {
         opacity: 1,
         fontWeight: 'bold',
+    },
+    splashContainer: {
+        flex: 1,
+        backgroundColor: '#FF5A5F',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    splashLogo: {
+        color: '#fff',
+        fontSize: 42,
+        fontWeight: 'bold',
+        letterSpacing: 6,
     },
 });

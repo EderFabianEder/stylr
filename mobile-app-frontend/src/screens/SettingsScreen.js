@@ -16,14 +16,43 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import {
     ChevronRight, Lock, LogOut, Trash2, Eye, Bell,
-    FileText, Shield, Info, User, AlertTriangle, X, UserX, ArrowLeft
+    FileText, Shield, Info, User, AlertTriangle, X, UserX, ArrowLeft, UserPlus
 } from 'lucide-react-native';
-import { authService, userService, blockService } from '../services/api';
+import { authService, userService, blockService, followService } from '../services/api';
+import FollowRequestsScreen from './FollowRequestsScreen';
 
 export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUnblockUser, onUpdateUser }) {
     // Privacy settings - initialisiert mit aktuellem User
     const [isProfilePublic, setIsProfilePublic] = useState(user?.account_type !== 'private');
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+    // Follow requests (nur für private Accounts)
+    const [showFollowRequests, setShowFollowRequests] = useState(false);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(null);
+
+    // Sync lokalen Privacy State mit User-Prop (falls extern geändert)
+    useEffect(() => {
+        setIsProfilePublic(user?.account_type !== 'private');
+    }, [user?.account_type]);
+
+    // Pending Follow-Requests zählen (nur für private Accounts)
+    useEffect(() => {
+        if (user?.account_type === 'private') {
+            let cancelled = false;
+            followService.getRequests(1)
+                .then(res => {
+                    if (cancelled) return;
+                    const data = res.data || {};
+                    const list = data.requests || data.data || (Array.isArray(data) ? data : []);
+                    const total = data.pagination?.total ?? data.total ?? list.length;
+                    setPendingRequestsCount(total);
+                })
+                .catch(() => { if (!cancelled) setPendingRequestsCount(null); });
+            return () => { cancelled = true; };
+        } else {
+            setPendingRequestsCount(null);
+        }
+    }, [user?.account_type, showFollowRequests]);
 
     // Blocked users aus API
     const [apiBlockedUsers, setApiBlockedUsers] = useState([]);
@@ -433,6 +462,15 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
         </Modal>
     );
 
+    if (showFollowRequests) {
+        return (
+            <FollowRequestsScreen
+                onBack={() => setShowFollowRequests(false)}
+                onCountChange={setPendingRequestsCount}
+            />
+        );
+    }
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -465,12 +503,26 @@ export default function SettingsScreen({ onLogout, user, blockedUsers = [], onUn
                 <View style={styles.sectionContainer}>
                     <ToggleItem
                         icon={Eye}
-                        title="Öffentliches Profil"
+                        title={isProfilePublic ? 'Öffentliches Profil' : 'Privates Profil'}
                         subtitle={isProfilePublic ? "Jeder kann dein Profil sehen" : "Nur Follower können dein Profil sehen"}
                         value={isProfilePublic}
                         onValueChange={handlePrivacyToggle}
                         disabled={isUpdatingPrivacy}
                     />
+                    {!isProfilePublic && (
+                        <SettingItem
+                            icon={UserPlus}
+                            title="Follow-Anfragen"
+                            subtitle={
+                                pendingRequestsCount === null
+                                    ? 'Anfragen verwalten'
+                                    : pendingRequestsCount === 0
+                                        ? 'Keine offenen Anfragen'
+                                        : `${pendingRequestsCount} offene Anfrage${pendingRequestsCount === 1 ? '' : 'n'}`
+                            }
+                            onPress={() => setShowFollowRequests(true)}
+                        />
+                    )}
                     <SettingItem
                         icon={UserX}
                         title="Blockierte Accounts"
