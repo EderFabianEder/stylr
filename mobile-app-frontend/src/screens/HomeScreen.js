@@ -587,9 +587,11 @@ const styles = StyleSheet.create({
         borderWidth: 4,
         borderRadius: 10,
     },
-    overlayLike: { right: 20, borderColor: '#34C759', transform: [{ rotate: '18deg' }] },
+    // Swipe nach LINKS = LIKE  →  Label links auf der Karte
+    overlayLike: { left: 20, borderColor: '#34C759', transform: [{ rotate: '-18deg' }] },
     overlayLikeText: { color: '#34C759', fontSize: 32, fontWeight: '900' },
-    overlayNope: { left: 20, borderColor: '#FF3B30', transform: [{ rotate: '-18deg' }] },
+    // Swipe nach RECHTS = DISLIKE (NOPE)  →  Label rechts auf der Karte
+    overlayNope: { right: 20, borderColor: '#FF3B30', transform: [{ rotate: '18deg' }] },
     overlayNopeText: { color: '#FF3B30', fontSize: 32, fontWeight: '900' },
     overlaySkip: { alignSelf: 'center', left: 0, right: 0, top: 30, alignItems: 'center', borderColor: '#007AFF', marginHorizontal: 60 },
     overlaySkipText: { color: '#007AFF', fontSize: 28, fontWeight: '900' },
