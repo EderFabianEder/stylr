@@ -234,37 +234,46 @@ export default function HomeScreen({ user, onBlockUser }) {
         }).start();
     }, [position]);
 
-    // PanResponder für Drag-Gesten
+    // Ref-Bridge: PanResponder wird nur einmal erstellt und würde sonst
+    // die allererste Version von swipeOut/resetPosition einfrieren.
+    const swipeOutRef = useRef(swipeOut);
+    const resetPositionRef = useRef(resetPosition);
+    useEffect(() => { swipeOutRef.current = swipeOut; }, [swipeOut]);
+    useEffect(() => { resetPositionRef.current = resetPosition; }, [resetPosition]);
+
+    // PanResponder EINMAL erstellen — er ruft die aktuellsten Handler via Ref auf
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => false,
-            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8,
+            onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponderCapture: () => false,
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
+            onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
+            onPanResponderTerminationRequest: () => false,
             onPanResponderMove: (_, g) => {
                 if (isAnimating.current) return;
                 position.setValue({ x: g.dx, y: g.dy });
             },
             onPanResponderRelease: (_, g) => {
                 if (isAnimating.current) return;
-                // Vorrang: große Horizontal-Bewegung vor vertikaler
                 if (g.dx > SWIPE_THRESHOLD || g.vx > VELOCITY_THRESHOLD) {
-                    swipeOut('right');
+                    swipeOutRef.current('right');
                 } else if (g.dx < -SWIPE_THRESHOLD || g.vx < -VELOCITY_THRESHOLD) {
-                    swipeOut('left');
+                    swipeOutRef.current('left');
                 } else if (g.dy < -SWIPE_THRESHOLD || g.vy < -VELOCITY_THRESHOLD) {
-                    swipeOut('up');
+                    swipeOutRef.current('up');
                 } else {
-                    resetPosition();
+                    resetPositionRef.current();
                 }
             },
-            onPanResponderTerminate: () => resetPosition(),
+            onPanResponderTerminate: () => resetPositionRef.current(),
         })
     ).current;
 
     // Button-Aktionen triggern die gleiche Swipe-Animation
-    // Like = links, Dislike = rechts (von User gewünschte Anordnung)
-    const pressLike = () => swipeOut('left');
-    const pressDislike = () => swipeOut('right');
-    const pressSkip = () => swipeOut('up');
+    // Like = links, Dislike = rechts
+    const pressLike = () => swipeOutRef.current('left');
+    const pressDislike = () => swipeOutRef.current('right');
+    const pressSkip = () => swipeOutRef.current('up');
 
     const onRefresh = useCallback(() => { loadPosts(true); }, []);
 
