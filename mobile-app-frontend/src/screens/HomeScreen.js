@@ -39,14 +39,21 @@ export default function HomeScreen({ user, onBlockUser }) {
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    // offset (for-you) bzw. page (following/friends)
-    const [cursor, setCursor] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
     // Animated values
     const position = useRef(new Animated.ValueXY()).current;
     const isAnimating = useRef(false);
+
+    // Refs statt State, damit loadPosts nie aus veraltetem Closure liest
+    const feedTypeRef = useRef(feedType);
+    const cursorRef = useRef(0);           // nächste Offset- bzw. Page-Nummer
+    const postsRef = useRef([]);            // spiegelt posts-State
+    const isLoadingRef = useRef(false);     // lock gegen parallele Requests
+
+    useEffect(() => { feedTypeRef.current = feedType; }, [feedType]);
+    useEffect(() => { postsRef.current = posts; }, [posts]);
 
     // Persistente Liste gesehener Post-IDs (überlebt App-Neustart)
     const seenPostIdsRef = useRef(new Set());
@@ -69,7 +76,6 @@ export default function HomeScreen({ user, onBlockUser }) {
     const persistSeen = async () => {
         try {
             const arr = [...seenPostIdsRef.current];
-            // weiche Obergrenze: nur die letzten SEEN_LIMIT behalten
             const trimmed = arr.length > SEEN_LIMIT ? arr.slice(arr.length - SEEN_LIMIT) : arr;
             if (trimmed.length !== arr.length) seenPostIdsRef.current = new Set(trimmed);
             await AsyncStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(trimmed));
@@ -82,47 +88,53 @@ export default function HomeScreen({ user, onBlockUser }) {
         persistSeen();
     };
 
-    // Feed wechseln → von vorn laden (erst nachdem seenIds geladen sind)
-    useEffect(() => { if (seenLoaded) loadPosts(true); }, [feedType, seenLoaded]);
+    const loadPosts = useCallback(async (reset = false) => {
+        // Harter Lock: nur ein Request gleichzeitig, egal was der Auslöser war
+        if (isLoadingRef.current) return;
+        isLoadingRef.current = true;
 
-    const loadPosts = async (reset = false) => {
-        if (isLoadingMore && !reset) return;
+        const typeNow = feedTypeRef.current;
+
         try {
-            if (reset) { setIsLoading(true); setCursor(0); }
-            else { setIsLoadingMore(true); }
+            if (reset) {
+                setIsLoading(true);
+                cursorRef.current = typeNow === 'forYou' ? 0 : 1;
+            } else {
+                setIsLoadingMore(true);
+            }
 
             let rawPosts = [];
             let nextHasMore = false;
-            let nextCursor = cursor;
 
-            if (feedType === 'forYou') {
-                const currentOffset = reset ? 0 : cursor;
+            if (typeNow === 'forYou') {
+                const currentOffset = cursorRef.current;
                 const response = await postService.getForYou(10, currentOffset);
                 rawPosts = response.data || [];
                 const meta = response.meta || {};
-                nextCursor = meta.offset ?? currentOffset + rawPosts.length;
-                nextHasMore = meta.has_more ?? rawPosts.length >= 10;
+                // Offset IMMER lokal weiterzählen — nicht auf meta.offset vertrauen
+                cursorRef.current = currentOffset + rawPosts.length;
+                nextHasMore = (meta.has_more ?? rawPosts.length >= 10) && rawPosts.length > 0;
             } else {
-                const currentPage = reset ? 1 : (cursor || 1);
-                const response = feedType === 'following'
+                const currentPage = cursorRef.current || 1;
+                const response = typeNow === 'following'
                     ? await postService.getFollowing(currentPage)
                     : await postService.getFriends(currentPage);
                 const data = response.data || {};
                 rawPosts = data.data || (Array.isArray(data) ? data : []);
                 const currentP = data.current_page || currentPage;
                 const lastP = data.last_page || currentPage;
-                nextCursor = currentP + 1;
+                cursorRef.current = currentP + 1;
                 nextHasMore = currentP < lastP;
             }
 
             // Bereits gesehene Posts + Duplikate rausfiltern
-            const existingIds = new Set((reset ? [] : posts).map(p => p.id));
+            const existingIds = new Set((reset ? [] : postsRef.current).map(p => p.id));
             const batchSeen = new Set();
             const newPosts = rawPosts.filter(p => {
                 if (!p || p.id == null) return false;
                 if (seenPostIdsRef.current.has(p.id)) return false;
                 if (existingIds.has(p.id)) return false;
-                if (batchSeen.has(p.id)) return false; // Dedup innerhalb derselben Response
+                if (batchSeen.has(p.id)) return false;
                 batchSeen.add(p.id);
                 return true;
             });
@@ -135,16 +147,28 @@ export default function HomeScreen({ user, onBlockUser }) {
                 setPosts(prev => [...prev, ...newPosts]);
             }
 
-            setCursor(nextCursor);
             setHasMore(nextHasMore);
+
+            // Wenn nach dem Filtern zu wenig übrig ist, aber Backend noch mehr hat — direkt nachladen
+            if (nextHasMore && newPosts.length < 3) {
+                isLoadingRef.current = false;
+                setIsLoadingMore(false);
+                setIsLoading(false);
+                await loadPosts(false);
+                return;
+            }
         } catch (error) {
             console.log('Failed to load posts:', error);
             if (reset) setPosts([]);
         } finally {
             setIsLoading(false);
             setIsLoadingMore(false);
+            isLoadingRef.current = false;
         }
-    };
+    }, [position]);
+
+    // Feed wechseln → von vorn laden (erst nachdem seenIds geladen sind)
+    useEffect(() => { if (seenLoaded) loadPosts(true); }, [feedType, seenLoaded, loadPosts]);
 
     const fireLike = useCallback((post) => {
         if (!post) return;
@@ -168,15 +192,17 @@ export default function HomeScreen({ user, onBlockUser }) {
     const goNext = useCallback(() => {
         setPosts(prev => {
             const next = prev.slice(1);
-            if (hasMore && !isLoadingMore && next.length <= 4) {
-                loadPosts(false);
+            // Nachladen, wenn Stack dünn wird — wir prüfen per Ref, nicht aus Closure
+            if (next.length <= 4) {
+                // setTimeout, damit der Render-Cycle erst den spliced State verarbeitet
+                setTimeout(() => { loadPosts(false); }, 0);
             }
             return next;
         });
         setCurrentIndex(0);
         position.setValue({ x: 0, y: 0 });
         isAnimating.current = false;
-    }, [hasMore, isLoadingMore, position]);
+    }, [position, loadPosts]);
 
     // Karte rausanimieren
     const swipeOut = useCallback((direction) => {
