@@ -215,8 +215,9 @@ export default function HomeScreen({ user, onBlockUser }) {
         markSeen(post.id);
 
         let toX = 0, toY = 0;
-        if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireDislike(post); }
-        else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireLike(post); }
+        // Tinder-Konvention: rechts = Like, links = Dislike
+        if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireLike(post); }
+        else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireDislike(post); }
         else if (direction === 'up') { toY = -SCREEN_HEIGHT; /* skip, keine Reaktion */ }
 
         Animated.timing(position, {
@@ -270,9 +271,9 @@ export default function HomeScreen({ user, onBlockUser }) {
     ).current;
 
     // Button-Aktionen triggern die gleiche Swipe-Animation
-    // Like = links, Dislike = rechts
-    const pressLike = () => swipeOutRef.current('left');
-    const pressDislike = () => swipeOutRef.current('right');
+    // Like = rechts, Dislike = links (Tinder-Konvention)
+    const pressLike = () => swipeOutRef.current('right');
+    const pressDislike = () => swipeOutRef.current('left');
     const pressSkip = () => swipeOutRef.current('up');
 
     const onRefresh = useCallback(() => { loadPosts(true); }, []);
@@ -288,15 +289,15 @@ export default function HomeScreen({ user, onBlockUser }) {
         inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
         outputRange: ['-18deg', '0deg', '18deg'],
     });
-    // Like = Swipe nach LINKS, Dislike = Swipe nach RECHTS
+    // Tinder-Konvention: Swipe nach RECHTS = LIKE, Swipe nach LINKS = NOPE
     const likeOpacity = position.x.interpolate({
-        inputRange: [-SWIPE_THRESHOLD, 0],
-        outputRange: [1, 0],
+        inputRange: [0, SWIPE_THRESHOLD],
+        outputRange: [0, 1],
         extrapolate: 'clamp',
     });
     const nopeOpacity = position.x.interpolate({
-        inputRange: [0, SWIPE_THRESHOLD],
-        outputRange: [0, 1],
+        inputRange: [-SWIPE_THRESHOLD, 0],
+        outputRange: [1, 0],
         extrapolate: 'clamp',
     });
     const skipOpacity = position.y.interpolate({
@@ -394,7 +395,7 @@ export default function HomeScreen({ user, onBlockUser }) {
                     ❤️ {post.likes_count || 0} • 👎 {post.dislikes_count || 0} • 💬 {post.comments_count || 0}
                 </Text>
                 <Text style={styles.hintText}>
-                    ← Like  •  Dislike →  •  ↑ Skip
+                    ← Dislike  •  Like →  •  ↑ Skip
                 </Text>
             </View>
         </>
@@ -469,11 +470,11 @@ export default function HomeScreen({ user, onBlockUser }) {
                 <View style={styles.actionsWrapper}>
                     <View style={styles.actionsContainer}>
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.likeActionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={pressLike}
+                            style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+                            onPress={pressDislike}
                             activeOpacity={0.7}
                         >
-                            <Heart size={iconSize} color="#FF5A5F" />
+                            <X size={iconSize} color="#333" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -486,18 +487,18 @@ export default function HomeScreen({ user, onBlockUser }) {
 
                         <TouchableOpacity
                             style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={pressDislike}
-                            activeOpacity={0.7}
-                        >
-                            <X size={iconSize} color="#333" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
                             onPress={() => setShowComments(true)}
                             activeOpacity={0.7}
                         >
                             <MessageCircle size={iconSize} color="#333" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            style={[styles.actionButton, styles.likeActionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+                            onPress={pressLike}
+                            activeOpacity={0.7}
+                        >
+                            <Heart size={iconSize} color="#FF5A5F" />
                         </TouchableOpacity>
                     </View>
 
@@ -596,11 +597,11 @@ const styles = StyleSheet.create({
         borderWidth: 4,
         borderRadius: 10,
     },
-    // Swipe nach LINKS = LIKE  →  Label links auf der Karte
-    overlayLike: { left: 20, borderColor: '#34C759', transform: [{ rotate: '-18deg' }] },
+    // Tinder: Swipe rechts = LIKE → Label rechts auf der Karte
+    overlayLike: { right: 20, borderColor: '#34C759', transform: [{ rotate: '18deg' }] },
     overlayLikeText: { color: '#34C759', fontSize: 32, fontWeight: '900' },
-    // Swipe nach RECHTS = DISLIKE (NOPE)  →  Label rechts auf der Karte
-    overlayNope: { right: 20, borderColor: '#FF3B30', transform: [{ rotate: '18deg' }] },
+    // Swipe links = NOPE → Label links auf der Karte
+    overlayNope: { left: 20, borderColor: '#FF3B30', transform: [{ rotate: '-18deg' }] },
     overlayNopeText: { color: '#FF3B30', fontSize: 32, fontWeight: '900' },
     overlaySkip: { alignSelf: 'center', left: 0, right: 0, top: 30, alignItems: 'center', borderColor: '#007AFF', marginHorizontal: 60 },
     overlaySkipText: { color: '#007AFF', fontSize: 28, fontWeight: '900' },
