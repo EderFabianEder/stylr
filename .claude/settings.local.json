@@ -8,7 +8,25 @@
       "Bash(cmd /c \"if exist C:\\\\Users\\\\User\\\\Herd\\\\stylr-api\\\\.env \\(echo ENV EXISTS\\) else \\(echo ENV MISSING\\)\")",
       "Bash(powershell -Command:*)",
       "Bash(npx --prefix mobile-app-frontend eslint mobile-app-frontend/src/services/api.js mobile-app-frontend/src/screens/ChangeProfilePhotoScreen.js)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "PowerShell(git commit -m $msg)",
+      "PowerShell(git push)",
+      "PowerShell($msg = \"fix\\(home\\): switch to Tinder convention - right=Like, left=Dislike`n`nSwipe RIGHT = Like \\(green LIKE overlay on right, heart button right\\)`nSwipe LEFT = Dislike \\(red NOPE overlay on left, X button left\\)`nSwipe UP = Skip`nButtons reordered and hint text updated to match.`n`nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\")",
+      "Bash(tasklist)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
+      "PowerShell($pids = @\\(28096, 13560, 4576, 9460, 18560, 26740, 34464, 20260\\); foreach \\($p in $pids\\) { try { Stop-Process -Id $p -Force -ErrorAction Stop; Write-Output \"killed $p\" } catch { Write-Output \"skip $p : $\\($_.Exception.Message\\)\" } })",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -match \"stylr|mobile-app-frontend|expo\" } | Select-Object ProcessId, CommandLine)",
+      "Bash(rm -rf \"/c/Users/User/AppData/Local/Temp/metro-cache\")",
+      "Bash(rm -rf \"/c/Users/User/AppData/Local/Temp/metro-file-map-\"*)",
+      "Bash(rm -rf \"/c/Users/User/AppData/Local/Temp/haste-map-\"*)",
+      "Bash(rm -rf \"/c/Users/User/AppData/Local/Temp/react-\"*)",
+      "Bash(watchman watch-del-all *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://stylr-api.test/api/v1/posts)",
+      "Bash(curl -s http://stylr-api.test/api/v1/posts)",
+      "Bash(curl -s -o /tmp/for-you.txt -w \"status=%{http_code} size=%{size_download}\\\\n\" \"https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1/posts/for-you?limit=5&offset=0\")",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /tmp/r.txt -w \"status=%{http_code} size=%{size_download}\\\\n\" \"https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/api/v1/health\")",
+      "Bash(curl -s -o /tmp/r2.txt -w \"status=%{http_code} size=%{size_download}\\\\n\" \"https://stylr-api-qnpwmnzl.ams1.preview.ploi.it/\")"
     ]
   }
 }
