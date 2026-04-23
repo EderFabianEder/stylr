@@ -4,10 +4,14 @@ import {
     Modal, SafeAreaView, Platform, ActivityIndicator, Animated, PanResponder,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Heart, X, ArrowRight, MessageCircle, Flag } from 'lucide-react-native';
 import { postService } from '../services/api';
 import CommentScreen from './CommentScreen';
 import ReportScreen from './ReportScreen';
+
+const SEEN_STORAGE_KEY = 'seenPostIds';
+const SEEN_LIMIT = 2000; // weiche Obergrenze, damit die Liste nicht endlos wächst
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scale = (size) => (SCREEN_WIDTH / 375) * size;
@@ -43,8 +47,42 @@ export default function HomeScreen({ user, onBlockUser }) {
     const position = useRef(new Animated.ValueXY()).current;
     const isAnimating = useRef(false);
 
-    // Feed wechseln → von vorn laden
-    useEffect(() => { loadPosts(true); }, [feedType]);
+    // Persistente Liste gesehener Post-IDs (überlebt App-Neustart)
+    const seenPostIdsRef = useRef(new Set());
+    const [seenLoaded, setSeenLoaded] = useState(false);
+
+    // Beim Mount: gesehene IDs aus AsyncStorage laden
+    useEffect(() => {
+        (async () => {
+            try {
+                const stored = await AsyncStorage.getItem(SEEN_STORAGE_KEY);
+                if (stored) {
+                    const arr = JSON.parse(stored);
+                    if (Array.isArray(arr)) seenPostIdsRef.current = new Set(arr);
+                }
+            } catch (e) { /* noop */ }
+            setSeenLoaded(true);
+        })();
+    }, []);
+
+    const persistSeen = async () => {
+        try {
+            const arr = [...seenPostIdsRef.current];
+            // weiche Obergrenze: nur die letzten SEEN_LIMIT behalten
+            const trimmed = arr.length > SEEN_LIMIT ? arr.slice(arr.length - SEEN_LIMIT) : arr;
+            if (trimmed.length !== arr.length) seenPostIdsRef.current = new Set(trimmed);
+            await AsyncStorage.setItem(SEEN_STORAGE_KEY, JSON.stringify(trimmed));
+        } catch (e) { /* noop */ }
+    };
+
+    const markSeen = (postId) => {
+        if (postId == null) return;
+        seenPostIdsRef.current.add(postId);
+        persistSeen();
+    };
+
+    // Feed wechseln → von vorn laden (erst nachdem seenIds geladen sind)
+    useEffect(() => { if (seenLoaded) loadPosts(true); }, [feedType, seenLoaded]);
 
     const loadPosts = async (reset = false) => {
         if (isLoadingMore && !reset) return;
@@ -52,30 +90,37 @@ export default function HomeScreen({ user, onBlockUser }) {
             if (reset) { setIsLoading(true); setCursor(0); }
             else { setIsLoadingMore(true); }
 
-            let newPosts = [];
+            let rawPosts = [];
             let nextHasMore = false;
             let nextCursor = cursor;
 
             if (feedType === 'forYou') {
                 const currentOffset = reset ? 0 : cursor;
                 const response = await postService.getForYou(10, currentOffset);
-                newPosts = response.data || [];
+                rawPosts = response.data || [];
                 const meta = response.meta || {};
-                nextCursor = meta.offset ?? currentOffset + newPosts.length;
-                nextHasMore = meta.has_more ?? newPosts.length >= 10;
+                nextCursor = meta.offset ?? currentOffset + rawPosts.length;
+                nextHasMore = meta.has_more ?? rawPosts.length >= 10;
             } else {
                 const currentPage = reset ? 1 : (cursor || 1);
                 const response = feedType === 'following'
                     ? await postService.getFollowing(currentPage)
                     : await postService.getFriends(currentPage);
-                // Laravel paginator: { data: { data: [...], current_page, last_page } } oder { data: [...] }
                 const data = response.data || {};
-                newPosts = data.data || (Array.isArray(data) ? data : []);
+                rawPosts = data.data || (Array.isArray(data) ? data : []);
                 const currentP = data.current_page || currentPage;
                 const lastP = data.last_page || currentPage;
                 nextCursor = currentP + 1;
                 nextHasMore = currentP < lastP;
             }
+
+            // Bereits gesehene Posts + Duplikate (falls doch welche im gleichen Paket kommen) rausfiltern
+            const existingIds = new Set((reset ? [] : posts).map(p => p.id));
+            const newPosts = rawPosts.filter(p =>
+                p && p.id != null &&
+                !seenPostIdsRef.current.has(p.id) &&
+                !existingIds.has(p.id)
+            );
 
             if (reset) {
                 setPosts(newPosts);
@@ -133,6 +178,9 @@ export default function HomeScreen({ user, onBlockUser }) {
         isAnimating.current = true;
 
         const post = posts[currentIndex];
+        // Post als gesehen markieren — kommt nie wieder
+        if (post) markSeen(post.id);
+
         let toX = 0, toY = 0;
         if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireLike(post); }
         else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireDislike(post); }
