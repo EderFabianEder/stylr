@@ -34,7 +34,8 @@ const FEED_TYPES = [
 export default function HomeScreen({ user, onBlockUser }) {
     const [feedType, setFeedType] = useState('forYou');
     const [posts, setPosts] = useState([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
+    // eslint-disable-next-line no-unused-vars
+    const [, setCurrentIndex] = useState(0);
     const [showComments, setShowComments] = useState(false);
     const [showReport, setShowReport] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -114,13 +115,17 @@ export default function HomeScreen({ user, onBlockUser }) {
                 nextHasMore = currentP < lastP;
             }
 
-            // Bereits gesehene Posts + Duplikate (falls doch welche im gleichen Paket kommen) rausfiltern
+            // Bereits gesehene Posts + Duplikate rausfiltern
             const existingIds = new Set((reset ? [] : posts).map(p => p.id));
-            const newPosts = rawPosts.filter(p =>
-                p && p.id != null &&
-                !seenPostIdsRef.current.has(p.id) &&
-                !existingIds.has(p.id)
-            );
+            const batchSeen = new Set();
+            const newPosts = rawPosts.filter(p => {
+                if (!p || p.id == null) return false;
+                if (seenPostIdsRef.current.has(p.id)) return false;
+                if (existingIds.has(p.id)) return false;
+                if (batchSeen.has(p.id)) return false; // Dedup innerhalb derselben Response
+                batchSeen.add(p.id);
+                return true;
+            });
 
             if (reset) {
                 setPosts(newPosts);
@@ -159,31 +164,33 @@ export default function HomeScreen({ user, onBlockUser }) {
         })();
     }, []);
 
-    // Weiter zum nächsten Post + ggf. Nachladen
+    // Post komplett aus dem Array rauswerfen — kann garantiert nie wieder auftauchen
     const goNext = useCallback(() => {
-        setCurrentIndex(prev => {
-            const next = prev + 1;
-            if (hasMore && !isLoadingMore && posts.length - next <= 4) {
+        setPosts(prev => {
+            const next = prev.slice(1);
+            if (hasMore && !isLoadingMore && next.length <= 4) {
                 loadPosts(false);
             }
             return next;
         });
+        setCurrentIndex(0);
         position.setValue({ x: 0, y: 0 });
         isAnimating.current = false;
-    }, [hasMore, isLoadingMore, posts.length, position]);
+    }, [hasMore, isLoadingMore, position]);
 
     // Karte rausanimieren
     const swipeOut = useCallback((direction) => {
         if (isAnimating.current) return;
+        if (!posts[0]) return;
         isAnimating.current = true;
 
-        const post = posts[currentIndex];
+        const post = posts[0];
         // Post als gesehen markieren — kommt nie wieder
-        if (post) markSeen(post.id);
+        markSeen(post.id);
 
         let toX = 0, toY = 0;
-        if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireLike(post); }
-        else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireDislike(post); }
+        if (direction === 'right') { toX = SCREEN_WIDTH * 1.5; fireDislike(post); }
+        else if (direction === 'left') { toX = -SCREEN_WIDTH * 1.5; fireLike(post); }
         else if (direction === 'up') { toY = -SCREEN_HEIGHT; /* skip, keine Reaktion */ }
 
         Animated.timing(position, {
@@ -191,7 +198,7 @@ export default function HomeScreen({ user, onBlockUser }) {
             duration: SWIPE_OUT_DURATION,
             useNativeDriver: false,
         }).start(goNext);
-    }, [currentIndex, posts, fireLike, fireDislike, goNext, position]);
+    }, [posts, fireLike, fireDislike, goNext, position]);
 
     const resetPosition = useCallback(() => {
         Animated.spring(position, {
@@ -228,14 +235,16 @@ export default function HomeScreen({ user, onBlockUser }) {
     ).current;
 
     // Button-Aktionen triggern die gleiche Swipe-Animation
-    const pressLike = () => swipeOut('right');
-    const pressDislike = () => swipeOut('left');
+    // Like = links, Dislike = rechts (von User gewünschte Anordnung)
+    const pressLike = () => swipeOut('left');
+    const pressDislike = () => swipeOut('right');
     const pressSkip = () => swipeOut('up');
 
     const onRefresh = useCallback(() => { loadPosts(true); }, []);
 
-    const currentPost = posts[currentIndex];
-    const nextPost = posts[currentIndex + 1];
+    // Aktive Karte ist immer posts[0], nächste ist posts[1]
+    const currentPost = posts[0];
+    const nextPost = posts[1];
     const buttonSize = isSmallDevice ? 50 : isMediumDevice ? 58 : 65;
     const iconSize = isSmallDevice ? 22 : isMediumDevice ? 25 : 28;
 
@@ -244,14 +253,15 @@ export default function HomeScreen({ user, onBlockUser }) {
         inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
         outputRange: ['-18deg', '0deg', '18deg'],
     });
+    // Like = Swipe nach LINKS, Dislike = Swipe nach RECHTS
     const likeOpacity = position.x.interpolate({
-        inputRange: [0, SWIPE_THRESHOLD],
-        outputRange: [0, 1],
+        inputRange: [-SWIPE_THRESHOLD, 0],
+        outputRange: [1, 0],
         extrapolate: 'clamp',
     });
     const nopeOpacity = position.x.interpolate({
-        inputRange: [-SWIPE_THRESHOLD, 0],
-        outputRange: [1, 0],
+        inputRange: [0, SWIPE_THRESHOLD],
+        outputRange: [0, 1],
         extrapolate: 'clamp',
     });
     const skipOpacity = position.y.interpolate({
@@ -349,7 +359,7 @@ export default function HomeScreen({ user, onBlockUser }) {
                     ❤️ {post.likes_count || 0} • 👎 {post.dislikes_count || 0} • 💬 {post.comments_count || 0}
                 </Text>
                 <Text style={styles.hintText}>
-                    ← Dislike  •  Like →  •  ↑ Skip
+                    ← Like  •  Dislike →  •  ↑ Skip
                 </Text>
             </View>
         </>
@@ -424,11 +434,11 @@ export default function HomeScreen({ user, onBlockUser }) {
                 <View style={styles.actionsWrapper}>
                     <View style={styles.actionsContainer}>
                         <TouchableOpacity
-                            style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={pressDislike}
+                            style={[styles.actionButton, styles.likeActionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+                            onPress={pressLike}
                             activeOpacity={0.7}
                         >
-                            <X size={iconSize} color="#333" />
+                            <Heart size={iconSize} color="#FF5A5F" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -440,11 +450,11 @@ export default function HomeScreen({ user, onBlockUser }) {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.actionButton, styles.likeActionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
-                            onPress={pressLike}
+                            style={[styles.actionButton, { width: buttonSize, height: buttonSize, borderRadius: buttonSize / 2 }]}
+                            onPress={pressDislike}
                             activeOpacity={0.7}
                         >
-                            <Heart size={iconSize} color="#FF5A5F" />
+                            <X size={iconSize} color="#333" />
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -551,9 +561,9 @@ const styles = StyleSheet.create({
         borderWidth: 4,
         borderRadius: 10,
     },
-    overlayLike: { left: 20, borderColor: '#34C759', transform: [{ rotate: '-18deg' }] },
+    overlayLike: { right: 20, borderColor: '#34C759', transform: [{ rotate: '18deg' }] },
     overlayLikeText: { color: '#34C759', fontSize: 32, fontWeight: '900' },
-    overlayNope: { right: 20, borderColor: '#FF3B30', transform: [{ rotate: '18deg' }] },
+    overlayNope: { left: 20, borderColor: '#FF3B30', transform: [{ rotate: '-18deg' }] },
     overlayNopeText: { color: '#FF3B30', fontSize: 32, fontWeight: '900' },
     overlaySkip: { alignSelf: 'center', left: 0, right: 0, top: 30, alignItems: 'center', borderColor: '#007AFF', marginHorizontal: 60 },
     overlaySkipText: { color: '#007AFF', fontSize: 28, fontWeight: '900' },
